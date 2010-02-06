@@ -339,7 +339,7 @@ first_match(S, {comp_regexp,RE}) ->
 	nomatch -> nomatch
     end.
 
-first_match_re(RE, S, St) when S /= [] ->
+first_match_re(RE, S, St) when S =/= [] ->
     case re_apply(S, St, RE) of
 	{match,P,_Rest,Subs} -> {St,P-St,Subs};
 	nomatch -> first_match_re(RE, tl(S), St+1);
@@ -347,7 +347,7 @@ first_match_re(RE, S, St) when S /= [] ->
     end;
 first_match_re(_RE, [], _St) -> nomatch.
 
-first_match_comp(RE, S, St) when S /= [] ->
+first_match_comp(RE, S, St) when S =/= [] ->
     case comp_apply(S, St, RE) of
 	{match,P,_Rest} -> {St,P-St};
 	nomatch -> first_match_comp(RE, tl(S), St+1)
@@ -644,7 +644,7 @@ reg2(S0, Sc0) ->
     {L,Sc1,S1} = reg3(S0, Sc0),
     reg2p(S1, L, Sc1).
 
-reg2p([C|S0], L, Sc0) when C /= $|, C /= $) ->
+reg2p([C|S0], L, Sc0) when C =/= $|, C =/= $) ->
     {R,Sc1,S1} = reg3([C|S0], Sc0),
     %% reg2p(S1, {concat,L,R}, Sc1);
     case is_integer(R) of
@@ -713,7 +713,7 @@ reg4([$[|S0], Sc) ->
 %	{St,S1} -> parse_error({unterminated,"\""})
 %    end;
 reg4([C0|S0], Sc) when
-  is_integer(C0), C0 /= $*, C0 /= $+, C0 /= $?, C0 /= $], C0 /= $), C0 /= $} ->
+  is_integer(C0), C0 =/= $*, C0 =/= $+, C0 =/= $?, C0 =/= $], C0 =/= $), C0 =/= $} ->
     %% Handle \ quoted characters as well, at least those we see.
     {C1,S1} = char(C0, S0),
     {C1,Sc,S1};
@@ -759,12 +759,12 @@ pack_cc1([{Cf1,Cl1},{Cf2,Cl2}|Cc]) when Cl1 >= Cf2, Cl1 =< Cl2 ->
     pack_cc1([{Cf1,Cl2}|Cc]);
 pack_cc1([{Cf1,Cl1},{Cf2,Cl2}|Cc]) when Cl1 >= Cf2, Cl1 >= Cl2 ->
     pack_cc1([{Cf1,Cl1}|Cc]);
-pack_cc1([{Cf1,Cl1},{Cf2,Cl2}|Cc]) when Cl1+1 == Cf2 ->
+pack_cc1([{Cf1,Cl1},{Cf2,Cl2}|Cc]) when Cl1+1 =:= Cf2 ->
     pack_cc1([{Cf1,Cl2}|Cc]);
 pack_cc1([{Cf,Cl},C|Cc]) when Cl >= C -> pack_cc1([{Cf,Cl}|Cc]);
-pack_cc1([{Cf,Cl},C|Cc]) when Cl+1 == C -> pack_cc1([{Cf,C}|Cc]);
-pack_cc1([C,{Cf,Cl}|Cc]) when C == Cf-1 -> pack_cc1([{C,Cl}|Cc]);
-pack_cc1([C1,C2|Cc]) when C1+1 == C2 -> pack_cc1([{C1,C2}|Cc]);
+pack_cc1([{Cf,Cl},C|Cc]) when Cl+1 =:= C -> pack_cc1([{Cf,C}|Cc]);
+pack_cc1([C,{Cf,Cl}|Cc]) when C =:= Cf-1 -> pack_cc1([{C,Cl}|Cc]);
+pack_cc1([C1,C2|Cc]) when C1+1 =:= C2 -> pack_cc1([{C1,C2}|Cc]);
 pack_cc1([C|Cc]) -> [C|pack_cc1(Cc)];
 pack_cc1([]) -> [].
 
@@ -773,9 +773,9 @@ char_class("[:" ++ S0, Cc0) ->			%Start of POSIX char class
 	{Cc1,":]" ++ S1} -> char_class(S1, Cc1);
 	{_,_S1} -> parse_error({posix_cc,"[:" ++ S0})
     end;
-char_class([C1|S0], Cc) when C1 /= $] ->
+char_class([C1|S0], Cc) when C1 =/= $] ->
     case char(C1, S0) of
-	{Cf,[$-,C2|S1]} when C2 /= $] ->
+	{Cf,[$-,C2|S1]} when C2 =/= $] ->
 	    case char(C2, S1) of
 		{Cl,S2} when Cf < Cl -> char_class(S2, [{Cf,Cl}|Cc]); 
 		{_Cl,_S2} -> parse_error({char_class,[C1|S0]})
@@ -824,10 +824,10 @@ number(Cs, Acc) -> {Acc,Cs}.
 
 parse_error(E) -> throw({error,E}).
 
-%char_string([C|S]) when C /= $" -> char_string(S, C);
+%char_string([C|S]) when C =/= $" -> char_string(S, C);
 %char_string(S) -> {epsilon,S}.
 
-%char_string([C|S0], L) when C /= $" ->
+%char_string([C|S0], L) when C =/= $" ->
 %    char_string(S0, {concat,L,C});
 %char_string(S, L) -> {L,S}.
 
@@ -1132,7 +1132,7 @@ pack_crs([{C1,C2},{C3,C4}|Crs]) when C2 >= C3, C2 < C4 ->
     %% C1    C2
     %%    C3   C4
     pack_crs([{C1,C4}|Crs]);
-pack_crs([{C1,C2},{C3,C4}|Crs]) when C2 + 1 == C3 ->
+pack_crs([{C1,C2},{C3,C4}|Crs]) when C2 + 1 =:= C3 ->
     %% C1   C2
     %%        C3  C4
     pack_crs([{C1,C4}|Crs]);
@@ -1187,7 +1187,7 @@ build_dfa(Set, Us, N, Ts, Ms, NFA) ->
     %% List of all transition sets.
     Crs0 = [Cr || S <- Set,
 		  {Crs,_St} <- (element(S, NFA))#nfa_state.edges,
-		 is_list(Crs),
+		  is_list(Crs),
 		  Cr <- Crs ],
     Crs1 = lists:usort(Crs0),			%Must remove duplicates!
     %% Build list of disjoint test ranges.
@@ -1204,7 +1204,7 @@ disjoint_crs([{_C1,C2}=Cr1,{C3,_C4}=Cr2|Crs]) when C2 < C3 ->
     %% C1  C2
     %%        C3  C4
     [Cr1|disjoint_crs([Cr2|Crs])];
-disjoint_crs([{C1,C2},{C3,C4}|Crs]) when C1 == C3 ->
+disjoint_crs([{C1,C2},{C3,C4}|Crs]) when C1 =:= C3 ->
     %% C1     C2
     %% C3       C4
     [{C1,C2}|disjoint_crs(add_element({C2+1,C4}, Crs))];
@@ -1212,7 +1212,7 @@ disjoint_crs([{C1,C2},{C3,C4}|Crs]) when C1 < C3, C2 >= C3, C2 < C4 ->
     %% C1     C2
     %%    C3     C4
     [{C1,C3-1}|disjoint_crs(union([{C3,C2},{C2+1,C4}], Crs))];
-disjoint_crs([{C1,C2},{C3,C4}|Crs]) when C1 < C3, C2 == C4 ->
+disjoint_crs([{C1,C2},{C3,C4}|Crs]) when C1 < C3, C2 =:= C4 ->
     %% C1      C2
     %%    C3   C4
     [{C1,C3-1}|disjoint_crs(add_element({C3,C4}, Crs))];
@@ -1225,7 +1225,7 @@ disjoint_crs([]) -> [].
 
 build_dfa([Cr|Crs], Set, Us, N, Ts, Ms, NFA) ->
     case eclosure(move(Set, Cr, NFA), NFA) of
-	S when S /= [] ->
+	S when S =/= [] ->
 	    case keysearch(S, #dfa_state.nfa, Us) of
 		{value,#dfa_state{no=T}} ->
 		    build_dfa(Crs, Set, Us, N, [{Cr,T}|Ts], Ms, NFA);
@@ -1261,7 +1261,7 @@ eclosure([], _NFA, Ec) -> Ec.
 move(Sts, Cr, NFA) ->
     [ St || N <- Sts,
 	    {Crs,St} <- (element(N, NFA))#nfa_state.edges,
-	   is_list(Crs),
+	    is_list(Crs),
 %% 	    begin
 %% 		io:fwrite("move1: ~p\n", [{Sts,Cr,Crs,in_crs(Cr,Crs)}]),
 %% 		true

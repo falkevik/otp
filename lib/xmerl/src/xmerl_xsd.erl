@@ -178,22 +178,21 @@ load_xsd_state(Table) ->
     catch ets:lookup(Table,state).
    
 xmerl_xsd_vsn() ->
-    case lists:keysearch(vsn,1,xmerl_xsd:module_info(attributes)) of
-	{value,{_,MD5_VSN}} ->
+    case lists:keyfind(vsn,1,xmerl_xsd:module_info(attributes)) of
+	{_,MD5_VSN} ->
 	    MD5_VSN;
 	_ ->
 	    undefined
     end.
 xmerl_xsd_vsn_check(S=#xsd_state{vsn=MD5_VSN}) ->
-    case [V||{vsn,V}<-xmerl_xsd:module_info(attributes)] of
+    case [V || {vsn,V} <- xmerl_xsd:module_info(attributes)] of
 	[MD5_VSN] ->
 	    {ok,S};
 	_ ->
 	    {error,{[],?MODULE,{different_version_of_xmerl_xsd_module_used,
 		    state_not_reliable}}}
     end.
-    
-	
+
 
 %% @spec process_validate(Schema,Element) -> Result
 %% @equiv process_validate(Schema,Xml,[])
@@ -706,12 +705,8 @@ element_content({any,S},Any,_Env) ->
     NameSpace = wildcard_namespace(Any,S1),
     PC = processor_contents(Any),
     ?debug("element_content, any: Any content:~p~n",[Any#xmlElement.content]),
-    Pred = fun(E=#xmlElement{}) -> case kind(E) of
-				       annotation -> false;
-				       _ -> true
-				   end;
-	      (_) ->
-		   false
+    Pred = fun (E=#xmlElement{}) -> kind(E) =/= annotation;
+	       (_) -> false
 	   end,
     S2 = case filter(Pred,Any#xmlElement.content) of
 	     [] -> S1;
@@ -721,7 +716,7 @@ element_content({any,S},Any,_Env) ->
 	 end,
     {{any,{NameSpace,Occur,PC}},S2};
 element_content({IDC,S},El,Env) 
-  when IDC==unique;IDC==key;IDC==keyref->
+  when IDC =:= unique; IDC =:= key; IDC =:= keyref ->
     QName = qualify_NCName(El,reset_scope(S)),
     Ref = keyrefer(IDC,El,S),
     {SelField,S2} = type(El#xmlElement.content,S,[IDC|Env]),
@@ -872,11 +867,8 @@ element_content({anyAttribute,S},AA,_Env) ->
     
     NameSpace = wildcard_namespace(AA,S),
     PC = processor_contents(AA),
-    Pred = fun(E=#xmlElement{}) -> case kind(E) of
-			 annotation -> false;
-			 _ -> true
-		     end;
-	      (_) -> false
+    Pred = fun (#xmlElement{} = E) -> kind(E) =/= annotation;
+	       (_) -> false
 	   end,
     S2 =
 	case filter(Pred,AA#xmlElement.content) of
@@ -1641,12 +1633,7 @@ not_optional(X) ->
 all_optional([]) ->
     true;
 all_optional(L) ->
-    case filter(fun not_optional/1,L) of
-	[] ->
-	    true;
-	_ ->
-	    false
-    end.
+    filter(fun not_optional/1,L) =:= [].
 
 
 %% allowed_content/2 returns a representation of the allowed content
@@ -1964,8 +1951,8 @@ is_already_processed(NameSpace,#xsd_state{schema_name=SchemaName,
 					  checked_namespace_nodes=CNS}) ->
 %%     case {keymember(SchemaName,2,CNS),keymember(NameSpace,3,CNS)} of
 %% 	{true,true} ->
-    case keysearch(SchemaName,2,CNS) of
-	{_,{_,_,NameSpace}} ->
+    case lists:keyfind(SchemaName,2,CNS) of
+	{_,_,NameSpace} ->
 	    true;
 	_ ->
 	    false
@@ -1984,10 +1971,10 @@ save_namespace_definition(NameSpace,
     %% pair to the checked namespace list. 3b) Otherwise add the
     %% prefix - namespace pair.
     {Prefix,S2} = 
-	case keysearch(TNS,1,GNS) of
-	    {value,{_,ImportedNodes}} ->
-		case keysearch(NameSpace,2,ImportedNodes) of
-		    {value,{_P,_}} -> {_P,S};
+	case lists:keyfind(TNS,1,GNS) of
+	    {_,ImportedNodes} ->
+		case lists:keyfind(NameSpace,2,ImportedNodes) of
+		    {_P,_} -> {_P,S};
 		    _ -> {none,S}
 		end;
 	    _ ->
@@ -2011,10 +1998,10 @@ prefix_namespace_2global(Namespace,
 			 #xmlNamespace{nodes=Nodes},
 			 S=#xsd_state{targetNamespace=TNS,
 				     global_namespace_nodes=GNS}) ->
-    case keysearch(Namespace,2,Nodes) of
-	{value,{Prefix,_}} ->
-	    case keysearch(TNS,1,GNS) of
-		{value,{_,DefinedNamespaces}} ->
+    case lists:keyfind(Namespace,2,Nodes) of
+	{Prefix,_} ->
+	    case lists:keyfind(TNS,1,GNS) of
+		{_,DefinedNamespaces} ->
 		    S#xsd_state{global_namespace_nodes=
 				keyreplace(TNS,1,GNS,
 					   {TNS,add_once({Prefix,Namespace},
@@ -2181,7 +2168,7 @@ element_forbidden_content([],S) ->
     S;
 element_forbidden_content([El=#xmlElement{}|Els],S) ->
     case kind(El) of
-	K when K==complexType;K==simpleType;K==key;K==keyref;K==unique ->
+	K when K=:=complexType;K=:=simpleType;K=:=key;K=:=keyref;K=:=unique ->
 	    acc_errs(S,{error_path(El,schema),?MODULE,{element_content_must_not_contain,K,El}});
 	annotation ->
 	    element_forbidden_content(Els,S);
@@ -2371,8 +2358,8 @@ validate_xml(El = #xmlElement{name=Name},
 		    {error,{error_path(El,Name),?MODULE,
 			    {element_not_in_schema,[Name,ElQName,SchemaCM]}}};
 		_ ->
-		    case keysearch(if_atom_to_list(Namespace),1,SchemaLocations) of
-			{value,{_,Location}} ->
+		    case lists:keyfind(if_atom_to_list(Namespace),1,SchemaLocations) of
+			{_,Location} ->
 			    %% namespace present by schemaLocation
 			    %% attribute in instance.
 			    S1 = prefix_namespace_2global(Namespace,El#xmlElement.namespace,S),
@@ -2850,7 +2837,7 @@ check_all(XML=[E=#xmlElement{name=Name}|RestXML],CM,Occ,Env,S,
 			      S3#xsd_state{scope=S#xsd_state.scope},
 			      Result++Checked,PrevXML)
 	    end;
-	_  when element(1,Occ) == 0 ->
+	_  when element(1,Occ) =:= 0 ->
 	    {[],PrevXML,S};
 	_ ->
 	    Err = {error_path(E,Name),?MODULE,
@@ -2916,7 +2903,7 @@ schemaLocations(El=#xmlElement{attributes=Atts},S) ->
 	    S;
 	[#xmlAttribute{value=Paths}|_] ->
 	    case string:tokens(Paths," ") of
-		L when length(L) > 0 ->
+		[_|_] = L ->
 		    case length(L) rem 2 of
 			0 ->
 			    PairList = 
@@ -3401,11 +3388,10 @@ check_keys([Key=#id_constraint{selector={selector,SelectorPath},
     TargetNodeSet = target_node_set(SelectorPath,XMLEl,S),
     S3=
 	case qualified_node_set(Fields,TargetNodeSet,XMLEl,S) of
-	    {L,S1} when length(L)==length(TargetNodeSet) -> 
+	    {L,S1} when length(L) =:= length(TargetNodeSet) ->
 		%% Part1: 3.11.4.4.2.1
 		S2 = key_sequence_uniqueness(L,XMLEl,S1),
-		save_key(Key#id_constraint{key_sequence=L},S2),
-		S2;
+		save_key(Key#id_constraint{key_sequence=L},S2);
 	    {Err,S1} ->
 		acc_errs(S1,{error_path(XMLEl,XMLEl#xmlElement.name),?MODULE,
 			     {qualified_node_set_not_correct_for_key,Err}})
@@ -3549,7 +3535,7 @@ check_keyrefs(S) ->
     foldl(KeyExist, S, KeyRefs).
 check_keyref_cardinality(_,KR=#id_constraint{category=keyref,fields=KeyRefFs},
 			 K=#id_constraint{fields=KeyFs},S) ->
-    case length(KeyRefFs) == length(KeyFs) of
+    case length(KeyRefFs) =:= length(KeyFs) of
 	true ->
 	    S;
 	_ ->
@@ -3609,7 +3595,7 @@ check_reference({simple_or_complex_Type,Ref},S=#xsd_state{errors=Errs}) ->
     end;
 check_reference(Ref,S) ->
     acc_errs(S,{[],?MODULE,{internal_error,unknown_reference,Ref}}).
-    
+
 %% Substitution groups should be checked for cirkular references
 %% (invalid), that reference structure and type structure are
 %% concistent.
@@ -3763,8 +3749,8 @@ cmp_any_namespace({_,_,EIINS},Namespace,_S) ->
 	true ->
 	    true;
 	_ -> 
-	    case keysearch(EIINS,2,Namespace) of
-		{value,{'not',EIINS}} ->
+	    case lists:keyfind(EIINS,2,Namespace) of
+		{'not',EIINS} ->
 		    false;
 		_ ->
 		    true
@@ -4204,7 +4190,7 @@ extend_type([BaseCM|BaseRest],Ext=[{SeqCho,{Extension,Occ}}|ExtRest],Acc,S)
 	    {ResG,S2} = resolve(G,S),
 	    case ResG of
 	       #schema_group{content=GC} ->
-		    case keysearch(SeqCho,1,GC) of
+		    case lists:keysearch(SeqCho,1,GC) of
 			{value,SCC} ->
 			    extend_type([SCC|BaseRest],Ext,Acc,S);
 			_ ->
@@ -4404,8 +4390,8 @@ base_wildcard(BaseAtts) ->
     key1search(anyAttribute,BaseAtts,[]).
     
 complete_wildcard(LocalWC,CM,S) ->
-    case keysearch(attributeGroup,1,CM) of
-	{value,AttG={_,_Name}} ->
+    case lists:keyfind(attributeGroup,1,CM) of
+	{_,_Name}=AttG ->
 	    case resolve(AttG,S) of
 		{#schema_attribute_group{content=Atts},_S} ->
 		    case keysearch(anyAttribute,1,Atts) of
@@ -4440,10 +4426,10 @@ attribute_wildcard_union(NS,NS,S) ->
 attribute_wildcard_union(NS1,NS2,S) when NS1==['##any'];NS2==['##any'] ->
     {['##any'],S};
 attribute_wildcard_union(NS1,NS2,S) ->
-    case {keysearch('not',1,NS1),keysearch('not',1,NS2)} of
+    case {lists:keyfind('not',1,NS1),lists:keyfind('not',1,NS2)} of
 	{false,false} -> %% bullet 3
 	    {NS1 ++ [X||X<-NS2,member(X,NS1)==false],S};
-	{{value,{_,Set1}},{value,{_,Set2}}} -> %% bullet 4 or 1
+	{{_,Set1},{_,Set2}} -> %% bullet 4 or 1
 	    case {lists:sort(Set1),lists:sort(Set2)} of
 		{L,L} ->    {[{'not',L}],S};
 		_ ->	    {[{'not',[absent]}],S}
@@ -4759,7 +4745,8 @@ local_name(Name) when is_list(Name) ->
 %% transforms "a B c" to [a,'B',c]
 namestring2namelist(Str) ->
     split_by_whitespace(Str,[]).
-split_by_whitespace(Str,Acc) when is_list(Str),length(Str) > 0 ->
+
+split_by_whitespace([_|_]=Str,Acc) ->
     F = fun($ ) -> 
 		false;
 	   (_) ->
@@ -4975,13 +4962,13 @@ save_to_file(S=#xsd_state{tab2file=TF}) ->
 	    {ok,IO}=file:open(filename:rootname(S#xsd_state.schema_name)++".tab",
 			      [write]),
 	    io:format(IO,"~p~n",[catch ets:tab2list(S#xsd_state.table)]),
-	    file:close(IO);
+	    ok = file:close(IO);
 	false ->
 	    ok;
 	IOFile ->
 	    {ok,IO}=file:open(IOFile,[write]),
 	    io:format(IO,"~p~n",[catch ets:tab2list(S#xsd_state.table)]),
-	    file:close(IO)
+	    ok = file:close(IO)
     end.
 
 save_merged_type(Type=#schema_simple_type{},S) ->

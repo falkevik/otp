@@ -122,8 +122,6 @@ string(Str, Doc, Options) ->
 %%   xmlObj is a record with fields type and value,
 %%   where type is boolean | number | string
 string(Str, Node, Parents, Doc, Options) ->
-%% record with fields type and value,
-%%                where type is boolean | number | string
     FullParents = 
 	case Parents of
 	    [] ->
@@ -145,7 +143,7 @@ string(Str, Node, Parents, Doc, Options) ->
 %io:format("string NewContext=~p~n",[NewContext]),
     case NewContext#xmlContext.nodeset of
 	ScalObj = #xmlObj{type=Scalar} 
-	when Scalar == boolean;	Scalar == number; Scalar == string ->
+	when Scalar =:= boolean; Scalar =:= number; Scalar =:= string ->
 	    ScalObj;
 	#xmlObj{type=nodeset,value=NodeSet} -> 
 	    NodeSet;
@@ -318,13 +316,13 @@ eval_path(union, {PathExpr1, PathExpr2}, C = #xmlContext{}) ->
     NewNodeSet = ordsets:to_list(ordsets:union(ordsets:from_list(NodeSet1),
 					       ordsets:from_list(NodeSet2))),
     S2#state{context=(S2#state.context)#xmlContext{nodeset=NewNodeSet}};
-eval_path(abs, PathExpr, C = #xmlContext{}) ->
-    NodeSet = [C#xmlContext.whole_document],
+eval_path(abs, PathExpr, C = #xmlContext{whole_document = Document}) ->
+    NodeSet = [Document],
     Context = C#xmlContext{nodeset = NodeSet},
     S = #state{context = Context},
     path_expr(PathExpr, S);
-eval_path(rel, PathExpr, C = #xmlContext{}) ->
-    NodeSet = [C#xmlContext.context_node],
+eval_path(rel, PathExpr, C = #xmlContext{context_node = Node}) ->
+    NodeSet = [Node],
     Context = C#xmlContext{nodeset = NodeSet},
     S = #state{context = Context},
     path_expr(PathExpr, S);
@@ -420,7 +418,7 @@ match_self(Tok, N, Acc, Context) ->
 match_descendant(Tok, N, Acc, Context) ->
     #xmlNode{parents = Ps, node = Node, type = Type} = N,
     case Type of
-	El when El == element; El == root_node ->
+	El when El =:= element; El =:= root_node ->
 	    NewPs = [N|Ps],
 	    match_desc(get_content(Node), NewPs, Tok, Acc, Context);
 	_Other ->
@@ -458,7 +456,7 @@ match_child(Tok, N, Acc, Context) ->
     %io:format("match_child(~p)~n", [write_node(N)]),
     #xmlNode{parents = Ps, node = Node, type = Type} = N,
     case Type of
-	El when El == element; El == root_node ->
+	El when El =:= element; El =:= root_node ->
 	    NewPs = [N|Ps],
 	    lists:foldr(
 	      fun(E, AccX) ->
@@ -654,7 +652,7 @@ update_nodeset(Context = #xmlContext{axis_type = AxisType}, NodeSet) ->
 node_test(F, N, Context) when is_function(F) ->
     F(N, Context);
 node_test({wildcard, _}, #xmlNode{type=ElAt}, _Context) 
-  when ElAt==element; ElAt==attribute -> 
+  when ElAt =:= element; ElAt =:= attribute ->
     true;
 node_test({prefix_test, Prefix}, #xmlNode{node = N}, _Context) ->
     case N of
@@ -708,8 +706,8 @@ node_test({name, {_Tag, Prefix, Local}},
 					nsinfo = {_Prefix1, _},
 					namespace = NS}}, _Context) -> 
     NSNodes = NS#xmlNamespace.nodes,
-    case lists:keysearch(Prefix, 1, NSNodes) of
-	{value, {_, URI}} ->
+    case lists:keyfind(Prefix, 1, NSNodes) of
+	{_, URI} ->
 	    ?dbg("node_test(~, ~p) -> true.~n", 
 		 [{_Tag, Prefix, Local}, write_node(NSNodes)]),
 	    true;
@@ -740,8 +738,8 @@ node_test(_Other, _N, _Context) ->
 
 
 expanded_name(Prefix, Local, #xmlContext{namespace = NS}) ->
-    case lists:keysearch(Prefix, 1, NS) of
-	{value, {_, URI}} ->
+    case lists:keyfind(Prefix, 1, NS) of
+	{_, URI} ->
 	    {URI, list_to_atom(Local)};
 	false ->
 	    []
