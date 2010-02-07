@@ -97,13 +97,9 @@ do_get_disc_copy2(Tab, Reason, Storage, Type) when Storage == ram_copies ->
 		    case mnesia_lib:exists(Fname) of 
 			true -> mnesia_log:dcd2ets(Tab, Repair);
 			false ->
-			    case mnesia_lib:exists(Datname) of
-				true ->
-				    mnesia_lib:dets_to_ets(Tab, Tab, Datname, 
-							   Type, Repair, no);
-				false ->
-				    false
-			    end
+			    mnesia_lib:exists(Datname) andalso
+				mnesia_lib:dets_to_ets(Tab, Tab, Datname,
+						       Type, Repair, no)
 		    end;
 		false ->
 		    false
@@ -642,7 +638,7 @@ calc_nokeys(Storage, Tab) ->
     %% Calculate #keys per transfer
     Key = mnesia_lib:db_first(Storage, Tab),
     Recs = mnesia_lib:db_get(Storage, Tab, Key),
-    BinSize = size(term_to_binary(Recs)),
+    BinSize = byte_size(term_to_binary(Recs)),
     (?MAX_TRANSFER_SIZE div BinSize) + 1.
 
 send_table(Pid, Tab, RemoteS) ->
@@ -831,7 +827,7 @@ finish_copy(Pid, Tab, Storage, RemoteS) ->
 		receive
 		    {Pid, no_more} -> % Dont bother about the spurious 'more' message
 			no_more;
-		    {copier_done, Node} when Node == node(Pid)->
+		    {copier_done, Node} when Node =:= node(Pid) ->
 			verbose("Tab receiver ~p crashed (more): ~p~n", [Tab, Node]),
 			receiver_died
 		end
@@ -853,7 +849,7 @@ dat2bin(Tab, ram_copies, ram_copies) ->
 dat2bin(_Tab, _LocalS, _RemoteS) ->
     nobin.
 
-handle_exit(Pid, Reason) when node(Pid) == node() ->
+handle_exit(Pid, Reason) when node(Pid) =:= node() ->
     exit(Reason);
-handle_exit(_Pid, _Reason) ->  %% Not from our node, this will be handled by 
-    ignore.                  %% mnesia_down soon.
+handle_exit(_Pid, _Reason) -> %% Not from our node, this will be handled by
+    ignore.                   %% mnesia_down soon.

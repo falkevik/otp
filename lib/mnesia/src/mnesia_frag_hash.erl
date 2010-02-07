@@ -46,7 +46,7 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-init_state(_Tab, State) when State == undefined ->
+init_state(_Tab, undefined) ->
     #hash_state{n_fragments     = 1,
 		next_n_to_split = 1,
 		n_doubles       = 0,

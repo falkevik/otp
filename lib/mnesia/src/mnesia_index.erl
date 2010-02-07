@@ -45,7 +45,6 @@
 	 del_transient/3,
 	 del_index_table/3]).
 
--import(mnesia_lib, [verbose/2]).
 -include("mnesia.hrl").
 
 -record(index, {setorbag, pos_list}).
@@ -261,7 +260,7 @@ init_disc_index(Tab, [Pos | Tail]) when is_integer(Pos) ->
     Storage = disc_only_copies,
     Key = mnesia_lib:db_first(Storage, Tab),
     Recs = mnesia_lib:db_get(Storage, Tab, Key),
-    BinSize = size(term_to_binary(Recs)),
+    BinSize = byte_size(term_to_binary(Recs)),
     KeysPerChunk = (4000 div BinSize) + 1,
     Init = {start, KeysPerChunk},
     mnesia_lib:db_fixtable(Storage, Tab, true),
@@ -300,7 +299,7 @@ make_ram_index(Tab, [Pos | Tail]) ->
     make_ram_index(Tab, Tail).
 
 add_ram_index(Tab, Pos) when is_integer(Pos) ->
-    verbose("Creating index for ~w ~n", [Tab]),
+    mnesia_lib:verbose("Creating index for ~w ~n", [Tab]),
     Index = mnesia_monitor:mktab(mnesia_index, [bag, public]),
     Insert = fun(Rec, _Acc) ->
 		     true = ?ets_insert(Index, {element(Pos, Rec), element(2, Rec)})
@@ -315,14 +314,14 @@ add_ram_index(_Tab, snmp) ->
 
 add_index_info(Tab, Type, IxElem) ->
     Commit = val({Tab, commit_work}),
-    case lists:keysearch(index, 1, Commit) of
+    case lists:keyfind(index, 1, Commit) of
 	false ->
 	    Index = #index{setorbag = Type, 
 			   pos_list = [IxElem]},
 	    %% Check later if mnesia_tm is sensative about the order 
 	    mnesia_lib:set({Tab, commit_work}, 
 			   mnesia_lib:sort_commit([Index | Commit]));
-	{value, Old} ->
+	Old ->
 	    %% We could check for consistency here
 	    Index = Old#index{pos_list = [IxElem | Old#index.pos_list]},
 	    NewC = lists:keyreplace(index, 1, Commit, Index),
@@ -332,11 +331,11 @@ add_index_info(Tab, Type, IxElem) ->
 
 del_index_info(Tab, Pos) ->
     Commit = val({Tab, commit_work}),
-    case lists:keysearch(index, 1, Commit) of
+    case lists:keyfind(index, 1, Commit) of
 	false ->
 	    %% Something is wrong ignore
 	    skip;
-	{value, Old} ->
+	Old ->
 	    case lists:keydelete(Pos, 1, Old#index.pos_list) of
 		[] -> 
 		    NewC = lists:keydelete(index, 1, Commit),

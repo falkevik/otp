@@ -50,6 +50,7 @@
 	]).
 
 -include("mnesia.hrl").
+
 -import(mnesia_lib, [dbg_out/2, error/2, verbose/2]).
 
 -define(dbg(S,V), ok).
@@ -140,7 +141,7 @@ loop(State) ->
 	    try_sticky_lock(Tid, write, From, Oid),
 	    loop(State);
 
-	%% If Key == ?ALL it's a request to lock the entire table
+	%% If Key =:= ?ALL it's a request to lock the entire table
 	%%
 
 	{From, {read, Tid, Oid}} ->
@@ -168,7 +169,7 @@ loop(State) ->
 		[] -> 
 		    reply(From, not_stuck),
 		    loop(State);
-		[{_,Node}] when Node == node() ->
+		[{_,Node}] when Node =:= node() ->
 		    %% Lock is stuck here, see now if we can just set 
 		    %% a regular write lock
 		    try_lock(Tid, Lock, From, Oid),
@@ -196,7 +197,7 @@ loop(State) ->
 		[] ->
 		    set_read_lock_on_all_keys(Tid,From,Tab,IxKey,Pos),
 		    loop(State);
-		[{_,N}] when N == node() ->
+		[{_,N}] when N =:= node() ->
 		    set_read_lock_on_all_keys(Tid,From,Tab,IxKey,Pos),
 		    loop(State);
 		[{_,N}] ->
@@ -215,7 +216,7 @@ loop(State) ->
 	    mnesia_monitor:mnesia_down(?MODULE, Node),
 	    loop(State);
 
-	{'EXIT', Pid, _} when Pid == State#state.supervisor ->
+	{'EXIT', Pid, _} when Pid =:= State#state.supervisor ->
 	    do_stop();
 
 	{system, From, Msg} ->
@@ -244,7 +245,7 @@ try_sticky_lock(Tid, Op, Pid, {Tab, _} = Oid) ->
     case ?ets_lookup(mnesia_sticky_locks, Tab) of
 	[] ->
 	    try_lock(Tid, Op, Pid, Oid);
-	[{_,N}] when N == node() ->
+	[{_,N}] when N =:= node() ->
 	    try_lock(Tid, Op, Pid, Oid);
 	[{_,N}] ->
 	    Req = {Pid, {Op, Tid, Oid}},
@@ -275,8 +276,8 @@ try_lock(Tid, Op, SimpleOp, Lock, Pid, Oid) ->
     end.
 
 grant_lock(Tid, read, Lock, Oid = {Tab, Key})
-  when Key /= ?ALL, Tab /= ?GLOBAL ->
-    case node(Tid#tid.pid) == node() of
+  when Key =/= ?ALL, Tab =/= ?GLOBAL ->
+    case node(Tid#tid.pid) =:= node() of
 	true ->
 	    set_lock(Tid, Oid, Lock),
 	    {granted, lookup_in_client};
@@ -315,7 +316,7 @@ grant_lock(Tid, write, Lock, Oid) ->
 %% 3) TabLocks is the problem :-) They should not starve and not deadlock 
 %%    handle tablocks in queue as they had locks on unlocked records.
 
-can_lock(Tid, read, {Tab, Key}, AlreadyQ) when Key /= ?ALL ->
+can_lock(Tid, read, {Tab, Key}, AlreadyQ) when Key =/= ?ALL ->
     %% The key is bound, no need for the other BIF
     Oid = {Tab, Key}, 
     ObjLocks = ?ets_match_object(mnesia_held_locks, {Oid, write, '_'}),
@@ -327,7 +328,7 @@ can_lock(Tid, read, Oid, AlreadyQ) -> % Whole tab
     ObjLocks = ?ets_match_object(mnesia_held_locks, {{Tab, '_'}, write, '_'}),
     check_lock(Tid, Oid, ObjLocks, [], yes, AlreadyQ, read);
 
-can_lock(Tid, write, {Tab, Key}, AlreadyQ) when Key /= ?ALL -> 
+can_lock(Tid, write, {Tab, Key}, AlreadyQ) when Key =/= ?ALL ->
     Oid = {Tab, Key},
     ObjLocks = ?ets_lookup(mnesia_held_locks, Oid),
     TabLocks = ?ets_lookup(mnesia_held_locks, {Tab, ?ALL}),
@@ -345,15 +346,15 @@ check_lock(Tid, Oid, [Lock | Locks], TabLocks, X, AlreadyQ, Type) ->
 	    check_lock(Tid, Oid, Locks, TabLocks, X, AlreadyQ, Type);
 	WaitForTid ->
 	    Queue = allowed_to_be_queued(WaitForTid,Tid),
-	    if Queue == true -> 
+	    if Queue =:= true ->
 		    check_lock(Tid, Oid, Locks, TabLocks, {queue, WaitForTid}, AlreadyQ, Type);
-	       Tid#tid.pid == WaitForTid#tid.pid ->
+	       Tid#tid.pid =:= WaitForTid#tid.pid ->
 		    dbg_out("Spurious lock conflict ~w ~w: ~w -> ~w~n",
 			    [Oid, Lock, Tid, WaitForTid]),  
 		    %% Test..
 		    {Tab, _Key} = Oid,
-		    HaveQ = (ets:lookup(mnesia_lock_queue, Oid) /= []) 
-			orelse (ets:lookup(mnesia_lock_queue,{Tab,?ALL}) /= []),
+		    HaveQ = (ets:lookup(mnesia_lock_queue, Oid) =/= [])
+			orelse (ets:lookup(mnesia_lock_queue,{Tab,?ALL}) =/= []),
 		    if 
 			HaveQ -> 
 			    {no, WaitForTid};
@@ -375,9 +376,9 @@ check_lock(_, _, [], [], X = {queue, _Tid}, _AlreadyQ, _) ->
 check_lock(Tid, Oid, [], [], X, AlreadyQ, Type) ->
     {Tab, Key} = Oid,
     if
-	Type == write ->
+	Type =:= write ->
 	    check_queue(Tid, Tab, X, AlreadyQ);
-	Key == ?ALL ->
+	Key =:= ?ALL ->
 	    %% hmm should be solvable by a clever select expr but not today...
 	    check_queue(Tid, Tab, X, AlreadyQ);
 	true ->
@@ -434,11 +435,11 @@ sort_queue(QL) ->
 	    lists:reverse(lists:keysort(#queue.tid, QL));
 	r9b_plain -> 
 	    lists:sort(fun(#queue{tid=X},#queue{tid=Y}) -> 
-			       cmp_tid(true, X, Y) == 1
+			       cmp_tid(true, X, Y) =:= 1
 		       end, QL);
 	standard  -> 
 	    lists:sort(fun(#queue{tid=X},#queue{tid=Y}) ->
-			       cmp_tid(false, X, Y) == 1
+			       cmp_tid(false, X, Y) =:= 1
 		       end, QL)
     end.
 
@@ -483,7 +484,7 @@ release_remote_non_pending(Node, Pending) ->
     %% queue'd requests back to the failed node
 
     AllTids = ?ets_match(mnesia_tid_locks, {'$1', '_', '_'}),
-    Tids = [T || [T] <- AllTids, Node == node(T#tid.pid), not lists:member(T, Pending)],
+    Tids = [T || [T] <- AllTids, Node =:= node(T#tid.pid), not lists:member(T, Pending)],
     do_release_tids(Tids).
 
 do_release_tids([Tid | Tids]) ->
@@ -519,15 +520,15 @@ release_lock({Tid, Oid, {queued, _}}) ->
 						pid = '_', lucky = '_'});
 release_lock({Tid, Oid, Op}) ->
     if
-	Op == write ->
+	Op =:= write ->
 	    ?ets_delete(mnesia_held_locks, Oid);
-	Op == read ->
+	Op =:= read ->
 	    ets:delete_object(mnesia_held_locks, {Oid, Op, Tid})
     end.
 
 rearrange_queue([{_Tid, {Tab, Key}, _} | Locks]) ->
     if
-	Key /= ?ALL->	    
+	Key =/= ?ALL->
 	    Queue =  
 		ets:lookup(mnesia_lock_queue, {Tab, ?ALL}) ++ 
 		ets:lookup(mnesia_lock_queue, {Tab, Key}),
@@ -621,10 +622,10 @@ key_delete_all(Key, Pos, [H|T], Ack) ->
 key_delete_all(_, _, [], Ack) ->
     lists:reverse(Ack).
 
-ix_read_res(Tab,IxKey,Pos) ->
+ix_read_res(Tab, IxKey, Pos) ->
     Index = mnesia_index:get_index_table(Tab, Pos),
     Rks = mnesia_lib:elems(2,mnesia_index:db_get(Index, IxKey)),
-    lists:append(lists:map(fun(Real) -> mnesia_lib:db_get(Tab, Real) end, Rks)).
+    lists:append([mnesia_lib:db_get(Tab, Real) || Real <- Rks]).
 
 %% ********************* end server code ********************
 %% The following code executes at the client side of a transactions
@@ -642,8 +643,7 @@ mnesia_down(N, Pending) ->
 	    Pid ! {release_remote_non_pending, N, Pending}
     end.
 
-%% Aquire a write lock, but do a read, used by 
-%% mnesia:wread/1
+%% Aquire a write lock, but do a read, used by mnesia:wread/1
 
 rwlock(Tid, Store, Oid) ->
     {Tab, Key} = Oid,
@@ -660,9 +660,9 @@ rwlock(Tid, Store, Oid) ->
 		    Res;
 		no ->
 		    if
-			Key == ?ALL ->
+			Key =:= ?ALL ->
 			    w_nodes(Tab);
-			Tab == ?GLOBAL ->
+			Tab =:= ?GLOBAL ->
 			    w_nodes(Tab);
 			true ->
 			    dirty_rpc(Node, Tab, Key, Lock)
@@ -694,7 +694,7 @@ sticky_rwlock(Tid, Store, Oid) ->
 sticky_lock(Tid, Store, {Tab, Key} = Oid, Lock) ->
     N = val({Tab, where_to_read}), 
     if
-	node() == N ->
+	node() =:= N ->
 	    case need_lock(Store, Tab, Key, write) of
 	    	yes ->
 		    do_sticky_lock(Tid, Store, Oid, Lock);
@@ -751,11 +751,11 @@ stuck_elsewhere(Tid, Store, Tab, _Key, Oid, _Lock) ->
 
 dirty_sticky_lock(Tab, Key, Nodes, Lock) ->
     if
-	Lock == read_write ->
+	Lock =:= read_write ->
 	    mnesia_lib:db_get(Tab, Key);
-	Key == ?ALL ->
+	Key =:= ?ALL ->
 	    Nodes;
-	Tab == ?GLOBAL ->
+	Tab =:= ?GLOBAL ->
 	    Nodes;
 	true ->
 	    ok
@@ -778,7 +778,7 @@ wlock(Tid, Store, Oid) ->
 	    Op = {self(), {write, Tid, Oid}},
 	    ?ets_insert(Store, {{locks, Tab, Key}, write}),
 	    get_wlocks_on_nodes(Ns, Ns, Store, Op, Oid);
-	no when Key /= ?ALL, Tab /= ?GLOBAL ->
+	no when Key =/= ?ALL, Tab =/= ?GLOBAL ->
 	    [];
 	no ->
 	    w_nodes(Tab)
@@ -797,10 +797,10 @@ wlock_no_exist(Tid, Store, Tab, Ns) ->
 need_lock(Store, Tab, Key, LockPattern) ->
     TabL = ?ets_match_object(Store, {{locks, Tab, ?ALL}, LockPattern}),
     if 
-	TabL == [] ->
+	TabL =:= [] ->
 	    KeyL = ?ets_match_object(Store, {{locks, Tab, Key}, LockPattern}),
 	    if 
-		KeyL == [] ->
+		KeyL =:= [] ->
 		    yes;
 		true  ->
 		    no
@@ -857,9 +857,9 @@ get_rwlocks_on_nodes([Node | Tail], Res, ReadNode, Store, Tid, Oid) ->
     {?MODULE, Node} ! Op,
     ?ets_insert(Store, {nodes, Node}),
     receive_wlocks([Node], undefined, Store, Oid),
-    if node() == Node ->
+    if node() =:= Node ->
 	    get_rwlocks_on_nodes(Tail, Res, ReadNode, Store, Tid, Oid);
-       Res == rwlock -> %% Hmm	    
+       Res =:= rwlock -> %% Hmm
 	    Rest = lists:delete(ReadNode, Tail),
 	    Op2 = {self(), {read_write, Tid, Oid}},
 	    {?MODULE, ReadNode} ! Op2,
@@ -971,9 +971,9 @@ rlock(Tid, Store, Oid) ->
 		    rlock_get_reply(Node, Store, Oid, R);
 		no ->
 		    if
-			Key == ?ALL ->
+			Key =:= ?ALL ->
 			    [Node];
-			Tab == ?GLOBAL ->
+			Tab =:= ?GLOBAL ->
 			    [Node];
 			true ->
 			    dirty_rpc(Node, Tab, Key, read)
@@ -1102,6 +1102,8 @@ do_stop() ->
 system_continue(_Parent, _Debug, State) ->
     loop(State).
 
+-spec system_terminate(_, _, _, _) -> no_return().
+
 system_terminate(_Reason, _Parent, _Debug, _State) ->
     do_stop().
 
@@ -1123,17 +1125,13 @@ system_code_change(State, _Module, _OldVsn, _Extra) ->
 
 -record(pid_info, {serial, number, nodename, creation}).
 
-cmp_tid(R9B,
-	#tid{} = T,
-	#tid{} = T) when R9B == true; R9B == false ->
+cmp_tid(R9B, #tid{} = T, #tid{} = T) when is_boolean(R9B) ->
     0;
 cmp_tid(R9B,
 	#tid{counter = C, pid = Pid1},
-	#tid{counter = C, pid = Pid2}) when R9B == true; R9B == false ->
+	#tid{counter = C, pid = Pid2}) when is_boolean(R9B) ->
     cmp_pid_info(R9B, pid_to_pid_info(Pid1), pid_to_pid_info(Pid2));
-cmp_tid(R9B,
-	#tid{counter = C1},
-	#tid{counter = C2}) when R9B == true; R9B == false ->
+cmp_tid(R9B, #tid{counter = C1}, #tid{counter = C2}) when is_boolean(R9B) ->
     cmp(C1, C2).
 
 cmp_pid_info(_, #pid_info{} = PI, #pid_info{} = PI) ->

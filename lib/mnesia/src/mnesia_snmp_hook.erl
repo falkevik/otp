@@ -132,7 +132,7 @@ key_to_oid_i(Key, Types) -> keys_to_oid(size(Key), Key, [], Types).
 
 keys_to_oid(0, _Key, Oid, _Types) -> Oid;
 keys_to_oid(N, Key, Oid, Types) ->
-    Oid2 = lists:append(key_to_oid_i(element(N, Key), element(N, Types)), Oid),
+    Oid2 = key_to_oid_i(element(N, Key), element(N, Types)) ++ Oid,
     keys_to_oid(N-1, Key, Oid2, Types).
 
 %%--------------------------------------------------
