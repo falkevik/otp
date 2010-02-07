@@ -72,7 +72,7 @@
 %%	Pid = pid()
 %% @doc Starts or restarts the percept database.
 
--spec(start/0 :: () -> {'started', pid()} | {'restarted', pid()}).
+-spec start() -> {'started', pid()} | {'restarted', pid()}.
 
 start() ->
     case erlang:whereis(percept_db) of
@@ -92,7 +92,7 @@ start() ->
 %%	Pid = pid()
 %% @doc Stops the percept database.
 
--spec(stop/0 :: () -> 'not_started' | {'stopped', pid()}).
+-spec stop() -> 'not_started' | {'stopped', pid()}.
 
 stop() ->
     case erlang:whereis(percept_db) of
@@ -392,23 +392,14 @@ consolidate_runnability_loop(Key) ->
     consolidate_runnability_loop(ets:next(pdb_activity, Key)).
 
 list_all_ts() ->
-    ATs = [ Act#activity.timestamp || 
-	Act <- select_query({activity, []})],
-    STs = [ Act#activity.timestamp || 
-	Act <- select_query({scheduler, []})],
+    ATs = [Act#activity.timestamp || Act <- select_query({activity, []})],
+    STs = [Act#activity.timestamp || Act <- select_query({scheduler, []})],
     ITs = lists:flatten([
 	[I#information.start, 
 	 I#information.stop] || 
 	 I <- select_query({information, all})]),
-    % Filter out all undefined (non ts)
-    TsList = lists:filter(
-	fun(Element) -> 
-	    case Element of
-		{_,_,_} -> true;
-		_ -> false
-	    end
-	end, ATs ++ STs ++ ITs),
-    TsList.
+    %% Filter out all undefined (non ts)
+    [Elem || Elem = {_,_,_} <- ATs ++ STs ++ ITs].
 
 %% get_runnable_count(Type, State) -> RunnableCount
 %% In: 

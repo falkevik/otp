@@ -23,10 +23,10 @@
 %%% Type definitions	%%%
 %%% -------------------	%%%
 
--type(timestamp() :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}).
--type(true_mfa() :: {atom(), atom(), byte() | list()}).
--type(state() :: 'active' | 'inactive').
--type(scheduler_id() :: {'scheduler_id', non_neg_integer()}).
+-type timestamp() :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}.
+-type true_mfa() :: {atom(), atom(), byte() | list()}.
+-type state() :: 'active' | 'inactive'.
+-type scheduler_id() :: {'scheduler_id', non_neg_integer()}.
 
 %%% -------------------	%%%
 %%% 	Records		%%%
@@ -40,8 +40,7 @@
 	runnable_count = 0	%:: non_neg_integer()
 	}).
 
--record(
-	information, {
+-record(information, {
 	id			,%:: pid() | port(), 
 	name = undefined	,%:: atom() | string() | 'undefined', 
 	entry = undefined	,%:: true_mfa() | 'undefined', 
