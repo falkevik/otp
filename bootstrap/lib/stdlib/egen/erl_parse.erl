@@ -529,11 +529,11 @@ get_attribute(L, Name) ->
 get_attributes(L) ->
     erl_scan:attributes_info(L).
 
--file("/usr/local/otp/releases/sles10_32_R13B03_patched/lib/parsetools-2.0.1/include/yeccpre.hrl", 0).
+-file("/usr/local/lib/erlang/lib/parsetools-2.0/include/yeccpre.hrl", 0).
 %%
 %% %CopyrightBegin%
 %% 
-%% Copyright Ericsson AB 2008-2009. All Rights Reserved.
+%% Copyright Ericsson AB 1996-2009. All Rights Reserved.
 %% 
 %% The contents of this file are subject to the Erlang Public License,
 %% Version 1.1, (the "License"); you may not use this file except in
@@ -711,7 +711,7 @@ yecctoken2string(Other) ->
 
 
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 714).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 714).
 
 yeccpars2(0=S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_0(S, Cat, Ss, Stack, T, Ts, Tzr);
@@ -7816,7 +7816,7 @@ yeccpars2_5_(__Stack0) ->
    [ __1 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7819).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7819).
 -compile({inline,yeccpars2_12_/1}).
 -file("erl_parse.yrl", 79).
 yeccpars2_12_(__Stack0) ->
@@ -7849,7 +7849,7 @@ yeccpars2_27_(__Stack0) ->
    [ __1 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7852).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7852).
 -compile({inline,yeccpars2_42_/1}).
 -file("erl_parse.yrl", 140).
 yeccpars2_42_(__Stack0) ->
@@ -7858,7 +7858,7 @@ yeccpars2_42_(__Stack0) ->
    { type , ? line ( __1 ) , tuple , [ ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7861).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7861).
 -compile({inline,yeccpars2_43_/1}).
 -file("erl_parse.yrl", 141).
 yeccpars2_43_(__Stack0) ->
@@ -7867,7 +7867,7 @@ yeccpars2_43_(__Stack0) ->
    { type , ? line ( __1 ) , tuple , __2 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7870).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7870).
 -compile({inline,yeccpars2_45_/1}).
 -file("erl_parse.yrl", 120).
 yeccpars2_45_(__Stack0) ->
@@ -7876,7 +7876,7 @@ yeccpars2_45_(__Stack0) ->
    { ann_type , ? line ( __1 ) , [ __1 , __3 ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7879).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7879).
 -compile({inline,yeccpars2_51_/1}).
 -file("erl_parse.yrl", 149).
 yeccpars2_51_(__Stack0) ->
@@ -7885,7 +7885,7 @@ yeccpars2_51_(__Stack0) ->
    { type , ? line ( __1 ) , 'fun' , [ ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7888).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7888).
 -compile({inline,yeccpars2_57_/1}).
 -file("erl_parse.yrl", 157).
 yeccpars2_57_(__Stack0) ->
@@ -7903,7 +7903,7 @@ yeccpars2_58_(__Stack0) ->
    __3
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7906).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7906).
 -compile({inline,yeccpars2_60_/1}).
 -file("erl_parse.yrl", 136).
 yeccpars2_60_(__Stack0) ->
@@ -7912,7 +7912,7 @@ yeccpars2_60_(__Stack0) ->
    { type , ? line ( __1 ) , nil , [ ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7915).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7915).
 -compile({inline,yeccpars2_62_/1}).
 -file("erl_parse.yrl", 137).
 yeccpars2_62_(__Stack0) ->
@@ -7921,7 +7921,7 @@ yeccpars2_62_(__Stack0) ->
    { type , ? line ( __1 ) , list , [ __2 ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7924).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7924).
 -compile({inline,yeccpars2_66_/1}).
 -file("erl_parse.yrl", 138).
 yeccpars2_66_(__Stack0) ->
@@ -7931,7 +7931,7 @@ yeccpars2_66_(__Stack0) ->
     nonempty_list , [ __2 ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7934).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7934).
 -compile({inline,yeccpars2_69_/1}).
 -file("erl_parse.yrl", 173).
 yeccpars2_69_(__Stack0) ->
@@ -7958,7 +7958,7 @@ yeccpars2_75_(__Stack0) ->
    build_bin_type ( [ __1 , __3 ] , __5 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7961).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7961).
 -compile({inline,yeccpars2_77_/1}).
 -file("erl_parse.yrl", 176).
 yeccpars2_77_(__Stack0) ->
@@ -7968,7 +7968,7 @@ yeccpars2_77_(__Stack0) ->
     [ __2 , abstract ( 0 , ? line ( __1 ) ) ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7971).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7971).
 -compile({inline,yeccpars2_81_/1}).
 -file("erl_parse.yrl", 181).
 yeccpars2_81_(__Stack0) ->
@@ -7977,7 +7977,7 @@ yeccpars2_81_(__Stack0) ->
    { type , ? line ( __1 ) , binary , [ __2 , __4 ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7980).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7980).
 -compile({inline,yeccpars2_82_/1}).
 -file("erl_parse.yrl", 178).
 yeccpars2_82_(__Stack0) ->
@@ -7987,7 +7987,7 @@ yeccpars2_82_(__Stack0) ->
     [ abstract ( 0 , ? line ( __1 ) ) , __2 ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 7990).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 7990).
 -compile({inline,yeccpars2_83_/1}).
 -file("erl_parse.yrl", 153).
 yeccpars2_83_(__Stack0) ->
@@ -7997,7 +7997,7 @@ yeccpars2_83_(__Stack0) ->
     ? line ( __2 ) )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8000).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8000).
 -compile({inline,yeccpars2_85_/1}).
 -file("erl_parse.yrl", 161).
 yeccpars2_85_(__Stack0) ->
@@ -8007,7 +8007,7 @@ yeccpars2_85_(__Stack0) ->
     [ { type , ? line ( __1 ) , product , [ ] } , __4 ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8010).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8010).
 -compile({inline,yeccpars2_87_/1}).
 -file("erl_parse.yrl", 126).
 yeccpars2_87_(__Stack0) ->
@@ -8024,7 +8024,7 @@ yeccpars2_91_(__Stack0) ->
    [ __1 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8027).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8027).
 -compile({inline,yeccpars2_93_/1}).
 -file("erl_parse.yrl", 142).
 yeccpars2_93_(__Stack0) ->
@@ -8033,7 +8033,7 @@ yeccpars2_93_(__Stack0) ->
    { type , ? line ( __1 ) , record , [ __2 ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8036).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8036).
 -compile({inline,yeccpars2_95_/1}).
 -file("erl_parse.yrl", 170).
 yeccpars2_95_(__Stack0) ->
@@ -8051,7 +8051,7 @@ yeccpars2_97_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8054).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8054).
 -compile({inline,yeccpars2_98_/1}).
 -file("erl_parse.yrl", 143).
 yeccpars2_98_(__Stack0) ->
@@ -8061,7 +8061,7 @@ yeccpars2_98_(__Stack0) ->
     record , [ __2 | __4 ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8064).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8064).
 -compile({inline,yeccpars2_104_/1}).
 -file("erl_parse.yrl", 132).
 yeccpars2_104_(__Stack0) ->
@@ -8071,7 +8071,7 @@ yeccpars2_104_(__Stack0) ->
     [ __1 , __3 , [ ] ] }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8074).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8074).
 -compile({inline,yeccpars2_105_/1}).
 -file("erl_parse.yrl", 134).
 yeccpars2_105_(__Stack0) ->
@@ -8089,7 +8089,7 @@ yeccpars2_107_(__Stack0) ->
    build_gen_type ( __1 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8092).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8092).
 -compile({inline,yeccpars2_108_/1}).
 -file("erl_parse.yrl", 130).
 yeccpars2_108_(__Stack0) ->
@@ -8099,7 +8099,7 @@ yeccpars2_108_(__Stack0) ->
     normalise ( __1 ) , __3 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8102).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8102).
 -compile({inline,yeccpars2_111_/1}).
 -file("erl_parse.yrl", 147).
 yeccpars2_111_(__Stack0) ->
@@ -8117,7 +8117,7 @@ yeccpars2_113_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8120).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8120).
 -compile({inline,yeccpars2_116_/1}).
 -file("erl_parse.yrl", 164).
 yeccpars2_116_(__Stack0) ->
@@ -8135,7 +8135,7 @@ yeccpars2_118_(__Stack0) ->
    lift_unions ( __1 , __3 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8138).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8138).
 -compile({inline,yeccpars2_120_/1}).
 -file("erl_parse.yrl", 108).
 yeccpars2_120_(__Stack0) ->
@@ -8153,7 +8153,7 @@ yeccpars2_121_(__Stack0) ->
    [ __1 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8156).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8156).
 -compile({inline,yeccpars2_125_/1}).
 -file("erl_parse.yrl", 114).
 yeccpars2_125_(__Stack0) ->
@@ -8251,7 +8251,7 @@ yeccpars2_196_(__Stack0) ->
    [ __1 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8254).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8254).
 -compile({inline,yeccpars2_198_/1}).
 -file("erl_parse.yrl", 320).
 yeccpars2_198_(__Stack0) ->
@@ -8276,7 +8276,7 @@ yeccpars2_202_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8279).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8279).
 -compile({inline,yeccpars2_203_/1}).
 -file("erl_parse.yrl", 321).
 yeccpars2_203_(__Stack0) ->
@@ -8285,7 +8285,7 @@ yeccpars2_203_(__Stack0) ->
    { tuple , ? line ( __1 ) , __2 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8288).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8288).
 -compile({inline,yeccpars2_205_/1}).
 -file("erl_parse.yrl", 399).
 yeccpars2_205_(__Stack0) ->
@@ -8317,7 +8317,7 @@ yeccpars2_213_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8320).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8320).
 -compile({inline,yeccpars2_214_/1}).
 -file("erl_parse.yrl", 397).
 yeccpars2_214_(__Stack0) ->
@@ -8350,7 +8350,7 @@ yeccpars2_220_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8353).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8353).
 -compile({inline,yeccpars2_221_/1}).
 -file("erl_parse.yrl", 372).
 yeccpars2_221_(__Stack0) ->
@@ -8389,7 +8389,7 @@ yeccpars2_230_(__Stack0) ->
    [ ]
   end | __Stack0].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8392).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8392).
 -compile({inline,yeccpars2_232_/1}).
 -file("erl_parse.yrl", 418).
 yeccpars2_232_(__Stack0) ->
@@ -8406,7 +8406,7 @@ yeccpars2_234_(__Stack0) ->
    [ ]
   end | __Stack0].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8409).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8409).
 -compile({inline,yeccpars2_236_/1}).
 -file("erl_parse.yrl", 415).
 yeccpars2_236_(__Stack0) ->
@@ -8416,7 +8416,7 @@ yeccpars2_236_(__Stack0) ->
     { clause , L , [ { tuple , L , [ __1 , __3 , { var , L , '_' } ] } ] , __4 , __5 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8419).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8419).
 -compile({inline,yeccpars2_238_/1}).
 -file("erl_parse.yrl", 412).
 yeccpars2_238_(__Stack0) ->
@@ -8458,7 +8458,7 @@ yeccpars2_246_(__Stack0) ->
    { [ ] , __2 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8461).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8461).
 -compile({inline,yeccpars2_247_/1}).
 -file("erl_parse.yrl", 451).
 yeccpars2_247_(__Stack0) ->
@@ -8467,7 +8467,7 @@ yeccpars2_247_(__Stack0) ->
    { string , ? line ( __1 ) , element ( 3 , __1 ) ++ element ( 3 , __2 ) }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8470).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8470).
 -compile({inline,yeccpars2_252_/1}).
 -file("erl_parse.yrl", 377).
 yeccpars2_252_(__Stack0) ->
@@ -8476,7 +8476,7 @@ yeccpars2_252_(__Stack0) ->
    { 'receive' , ? line ( __1 ) , [ ] , __3 , __4 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8479).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8479).
 -compile({inline,yeccpars2_254_/1}).
 -file("erl_parse.yrl", 375).
 yeccpars2_254_(__Stack0) ->
@@ -8485,7 +8485,7 @@ yeccpars2_254_(__Stack0) ->
    { 'receive' , ? line ( __1 ) , __2 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8488).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8488).
 -compile({inline,yeccpars2_257_/1}).
 -file("erl_parse.yrl", 379).
 yeccpars2_257_(__Stack0) ->
@@ -8502,7 +8502,7 @@ yeccpars2_263_(__Stack0) ->
    [ __1 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8505).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8505).
 -compile({inline,yeccpars2_267_/1}).
 -file("erl_parse.yrl", 318).
 yeccpars2_267_(__Stack0) ->
@@ -8511,7 +8511,7 @@ yeccpars2_267_(__Stack0) ->
    { b_generate , ? line ( __2 ) , __1 , __3 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8514).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8514).
 -compile({inline,yeccpars2_269_/1}).
 -file("erl_parse.yrl", 317).
 yeccpars2_269_(__Stack0) ->
@@ -8528,7 +8528,7 @@ yeccpars2_271_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8531).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8531).
 -compile({inline,yeccpars2_272_/1}).
 -file("erl_parse.yrl", 310).
 yeccpars2_272_(__Stack0) ->
@@ -8537,7 +8537,7 @@ yeccpars2_272_(__Stack0) ->
    { lc , ? line ( __1 ) , __2 , __4 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8540).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8540).
 -compile({inline,yeccpars2_273_/1}).
 -file("erl_parse.yrl", 430).
 yeccpars2_273_(__Stack0) ->
@@ -8554,7 +8554,7 @@ yeccpars2_275_(__Stack0) ->
    [ __1 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8557).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8557).
 -compile({inline,yeccpars2_277_/1}).
 -file("erl_parse.yrl", 362).
 yeccpars2_277_(__Stack0) ->
@@ -8571,7 +8571,7 @@ yeccpars2_279_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8574).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8574).
 -compile({inline,yeccpars2_280_/1}).
 -file("erl_parse.yrl", 356).
 yeccpars2_280_(__Stack0) ->
@@ -8595,7 +8595,7 @@ yeccpars2_284_(__Stack0) ->
    [ ]
   end | __Stack0].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8598).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8598).
 -compile({inline,yeccpars2_287_/1}).
 -file("erl_parse.yrl", 433).
 yeccpars2_287_(__Stack0) ->
@@ -8604,7 +8604,7 @@ yeccpars2_287_(__Stack0) ->
    { [ ] , ? line ( __1 ) }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8607).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8607).
 -compile({inline,yeccpars2_288_/1}).
 -file("erl_parse.yrl", 434).
 yeccpars2_288_(__Stack0) ->
@@ -8622,7 +8622,7 @@ yeccpars2_290_(__Stack0) ->
     { clause , Pos , 'fun' , Args , __2 , __3 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8625).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8625).
 -compile({inline,yeccpars2_295_/1}).
 -file("erl_parse.yrl", 385).
 yeccpars2_295_(__Stack0) ->
@@ -8631,7 +8631,7 @@ yeccpars2_295_(__Stack0) ->
    { 'fun' , ? line ( __1 ) , { function , element ( 3 , __2 ) , element ( 3 , __4 ) , element ( 3 , __6 ) } }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8634).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8634).
 -compile({inline,yeccpars2_296_/1}).
 -file("erl_parse.yrl", 383).
 yeccpars2_296_(__Stack0) ->
@@ -8648,7 +8648,7 @@ yeccpars2_298_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8651).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8651).
 -compile({inline,yeccpars2_299_/1}).
 -file("erl_parse.yrl", 387).
 yeccpars2_299_(__Stack0) ->
@@ -8657,7 +8657,7 @@ yeccpars2_299_(__Stack0) ->
    build_fun ( ? line ( __1 ) , __2 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8660).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8660).
 -compile({inline,yeccpars2_300_/1}).
 -file("erl_parse.yrl", 208).
 yeccpars2_300_(__Stack0) ->
@@ -8666,7 +8666,7 @@ yeccpars2_300_(__Stack0) ->
    { 'catch' , ? line ( __1 ) , __2 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8669).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8669).
 -compile({inline,yeccpars2_304_/1}).
 -file("erl_parse.yrl", 366).
 yeccpars2_304_(__Stack0) ->
@@ -8675,7 +8675,7 @@ yeccpars2_304_(__Stack0) ->
    { 'case' , ? line ( __1 ) , __2 , __4 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8678).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8678).
 -compile({inline,yeccpars2_306_/1}).
 -file("erl_parse.yrl", 264).
 yeccpars2_306_(__Stack0) ->
@@ -8684,7 +8684,7 @@ yeccpars2_306_(__Stack0) ->
    { block , ? line ( __1 ) , __2 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8687).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8687).
 -compile({inline,yeccpars2_308_/1}).
 -file("erl_parse.yrl", 274).
 yeccpars2_308_(__Stack0) ->
@@ -8693,7 +8693,7 @@ yeccpars2_308_(__Stack0) ->
    { nil , ? line ( __1 ) }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8696).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8696).
 -compile({inline,yeccpars2_309_/1}).
 -file("erl_parse.yrl", 275).
 yeccpars2_309_(__Stack0) ->
@@ -8702,7 +8702,7 @@ yeccpars2_309_(__Stack0) ->
    { cons , ? line ( __1 ) , __2 , __3 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8705).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8705).
 -compile({inline,yeccpars2_311_/1}).
 -file("erl_parse.yrl", 277).
 yeccpars2_311_(__Stack0) ->
@@ -8719,7 +8719,7 @@ yeccpars2_314_(__Stack0) ->
    __2
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8722).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8722).
 -compile({inline,yeccpars2_316_/1}).
 -file("erl_parse.yrl", 279).
 yeccpars2_316_(__Stack0) ->
@@ -8743,7 +8743,7 @@ yeccpars2_322_(__Stack0) ->
    [ __1 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8746).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8746).
 -compile({inline,yeccpars2_323_/1}).
 -file("erl_parse.yrl", 282).
 yeccpars2_323_(__Stack0) ->
@@ -8760,7 +8760,7 @@ yeccpars2_325_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8763).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8763).
 -compile({inline,yeccpars2_326_/1}).
 -file("erl_parse.yrl", 283).
 yeccpars2_326_(__Stack0) ->
@@ -8769,7 +8769,7 @@ yeccpars2_326_(__Stack0) ->
    { bin , ? line ( __1 ) , __2 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8772).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8772).
 -compile({inline,yeccpars2_329_/1}).
 -file("erl_parse.yrl", 312).
 yeccpars2_329_(__Stack0) ->
@@ -8793,7 +8793,7 @@ yeccpars2_333_(__Stack0) ->
    __2
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8796).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8796).
 -compile({inline,yeccpars2_334_/1}).
 -file("erl_parse.yrl", 289).
 yeccpars2_334_(__Stack0) ->
@@ -8842,7 +8842,7 @@ yeccpars2_342_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8845).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8845).
 -compile({inline,yeccpars2_343_/1}).
 -file("erl_parse.yrl", 291).
 yeccpars2_343_(__Stack0) ->
@@ -8851,7 +8851,7 @@ yeccpars2_343_(__Stack0) ->
    ? mkop1 ( __1 , __2 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8854).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8854).
 -compile({inline,yeccpars2_344_/1}).
 -file("erl_parse.yrl", 250).
 yeccpars2_344_(__Stack0) ->
@@ -8924,7 +8924,7 @@ yeccpars2_362_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8927).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8927).
 -compile({inline,yeccpars2_363_/1}).
 -file("erl_parse.yrl", 95).
 yeccpars2_363_(__Stack0) ->
@@ -8949,7 +8949,7 @@ yeccpars2_365_(__Stack0) ->
    build_typed_attribute ( __2 , __4 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8952).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8952).
 -compile({inline,yeccpars2_367_/1}).
 -file("erl_parse.yrl", 335).
 yeccpars2_367_(__Stack0) ->
@@ -8974,7 +8974,7 @@ yeccpars2_374_(__Stack0) ->
    [ ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8977).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8977).
 -compile({inline,yeccpars2_376_/1}).
 -file("erl_parse.yrl", 347).
 yeccpars2_376_(__Stack0) ->
@@ -8983,7 +8983,7 @@ yeccpars2_376_(__Stack0) ->
    { record_field , ? line ( __1 ) , __1 , __3 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 8986).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 8986).
 -compile({inline,yeccpars2_378_/1}).
 -file("erl_parse.yrl", 348).
 yeccpars2_378_(__Stack0) ->
@@ -9008,7 +9008,7 @@ yeccpars2_381_(__Stack0) ->
    __2
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9011).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9011).
 -compile({inline,yeccpars2_382_/1}).
 -file("erl_parse.yrl", 333).
 yeccpars2_382_(__Stack0) ->
@@ -9025,7 +9025,7 @@ yeccpars2_384_(__Stack0) ->
    [ __1 | __3 ]
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9028).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9028).
 -compile({inline,yeccpars2_387_/1}).
 -file("erl_parse.yrl", 211).
 yeccpars2_387_(__Stack0) ->
@@ -9034,7 +9034,7 @@ yeccpars2_387_(__Stack0) ->
    { match , ? line ( __2 ) , __1 , __3 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9037).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9037).
 -compile({inline,yeccpars2_388_/1}).
 -file("erl_parse.yrl", 212).
 yeccpars2_388_(__Stack0) ->
@@ -9043,7 +9043,7 @@ yeccpars2_388_(__Stack0) ->
    ? mkop2 ( __1 , __2 , __3 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9046).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9046).
 -compile({inline,yeccpars2_390_/1}).
 -file("erl_parse.yrl", 215).
 yeccpars2_390_(__Stack0) ->
@@ -9052,7 +9052,7 @@ yeccpars2_390_(__Stack0) ->
    ? mkop2 ( __1 , __2 , __3 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9055).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9055).
 -compile({inline,yeccpars2_392_/1}).
 -file("erl_parse.yrl", 218).
 yeccpars2_392_(__Stack0) ->
@@ -9061,7 +9061,7 @@ yeccpars2_392_(__Stack0) ->
    ? mkop2 ( __1 , __2 , __3 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9064).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9064).
 -compile({inline,yeccpars2_402_/1}).
 -file("erl_parse.yrl", 222).
 yeccpars2_402_(__Stack0) ->
@@ -9070,7 +9070,7 @@ yeccpars2_402_(__Stack0) ->
    ? mkop2 ( __1 , __2 , __3 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9073).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9073).
 -compile({inline,yeccpars2_415_/1}).
 -file("erl_parse.yrl", 230).
 yeccpars2_415_(__Stack0) ->
@@ -9079,7 +9079,7 @@ yeccpars2_415_(__Stack0) ->
    ? mkop2 ( __1 , __2 , __3 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9082).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9082).
 -compile({inline,yeccpars2_423_/1}).
 -file("erl_parse.yrl", 234).
 yeccpars2_423_(__Stack0) ->
@@ -9088,7 +9088,7 @@ yeccpars2_423_(__Stack0) ->
    ? mkop2 ( __1 , __2 , __3 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9091).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9091).
 -compile({inline,yeccpars2_424_/1}).
 -file("erl_parse.yrl", 226).
 yeccpars2_424_(__Stack0) ->
@@ -9097,7 +9097,7 @@ yeccpars2_424_(__Stack0) ->
    ? mkop2 ( __1 , __2 , __3 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9100).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9100).
 -compile({inline,yeccpars2_425_/1}).
 -file("erl_parse.yrl", 353).
 yeccpars2_425_(__Stack0) ->
@@ -9106,7 +9106,7 @@ yeccpars2_425_(__Stack0) ->
    { call , ? line ( __1 ) , __1 , element ( 1 , __2 ) }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9109).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9109).
 -compile({inline,yeccpars2_428_/1}).
 -file("erl_parse.yrl", 246).
 yeccpars2_428_(__Stack0) ->
@@ -9115,7 +9115,7 @@ yeccpars2_428_(__Stack0) ->
    { remote , ? line ( __2 ) , __1 , __3 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9118).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9118).
 -compile({inline,yeccpars2_429_/1}).
 -file("erl_parse.yrl", 252).
 yeccpars2_429_(__Stack0) ->
@@ -9124,7 +9124,7 @@ yeccpars2_429_(__Stack0) ->
    { record_field , ? line ( __2 ) , __1 , __3 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9127).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9127).
 -compile({inline,yeccpars2_432_/1}).
 -file("erl_parse.yrl", 339).
 yeccpars2_432_(__Stack0) ->
@@ -9133,7 +9133,7 @@ yeccpars2_432_(__Stack0) ->
    { record , ? line ( __2 ) , __1 , element ( 3 , __3 ) , __4 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9136).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9136).
 -compile({inline,yeccpars2_434_/1}).
 -file("erl_parse.yrl", 337).
 yeccpars2_434_(__Stack0) ->
@@ -9142,7 +9142,7 @@ yeccpars2_434_(__Stack0) ->
    { record_field , ? line ( __2 ) , __1 , element ( 3 , __3 ) , __5 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9145).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9145).
 -compile({inline,yeccpars2_435_/1}).
 -file("erl_parse.yrl", 238).
 yeccpars2_435_(__Stack0) ->
@@ -9166,7 +9166,7 @@ yeccpars2_437_(__Stack0) ->
    element ( 1 , __1 )
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9169).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9169).
 -compile({inline,yeccpars2_439_/1}).
 -file("erl_parse.yrl", 492).
 yeccpars2_439_(__Stack0) ->
@@ -9175,7 +9175,7 @@ yeccpars2_439_(__Stack0) ->
    { clause , ? line ( __1 ) , element ( 3 , __1 ) , __2 , __3 , __4 }
   end | __Stack].
 
--file("/clearcase/otp/erts/bootstrap/lib/stdlib/egen/erl_parse.erl", 9178).
+-file("/Users/bjorng/Downloads/otp/bootstrap/lib/stdlib/egen/erl_parse.erl", 9178).
 -compile({inline,yeccpars2_440_/1}).
 -file("erl_parse.yrl", 197).
 yeccpars2_440_(__Stack0) ->
