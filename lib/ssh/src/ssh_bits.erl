@@ -63,7 +63,7 @@ string(Str) ->
     ?string(Str).
 
 
-%% MP representaion  (SSH2)
+%% MP representation  (SSH2)
 mpint(X) when X < 0 ->
     if X == -1 ->
 	    <<0,0,0,1,16#ff>>;	    
@@ -87,7 +87,7 @@ mpint_neg(X,I,Ds)  ->
     mpint_neg(X bsr 8,I+1,[(X band 255)|Ds]).
     
 mpint_pos(0,I,Ds=[MSB|_]) ->
-    if MSB band 16#80 == 16#80 ->
+    if MSB band 16#80 =:= 16#80 ->
 	    <<?UINT32((I+1)), (list_to_binary([0|Ds]))/binary>>;
        true ->
 	    (<<?UINT32(I), (list_to_binary(Ds))/binary>>)
@@ -181,13 +181,13 @@ enc(Xs, [Type|Ts], Offset) ->
 	{pad,N} ->
 	    K = (N - (Offset rem N)) rem N,
 	    [fill_bits(K,0) | enc(Xs, Ts, Offset+K)];
-	'...' when Ts==[] ->
+	'...' when Ts =:= [] ->
 	    X=hd(Xs),
 	    if is_binary(X) -> 
 		    [X];
 	       is_list(X) ->
 		    [list_to_binary(X)];
-	       X==undefined ->
+	       X =:= undefined ->
 		    []
 	    end
     end;
@@ -214,7 +214,7 @@ decode(Binary = <<?BYTE(ID), _/binary>>) ->
 %% Decode a binary form offset 0
 %%
 
-decode(Binary, Types) when is_binary(Binary) andalso is_list(Types) ->
+decode(Binary, Types) when is_binary(Binary), is_list(Types) ->
     {_,Elems} = decode(Binary, 0, Types),
     Elems.
 
@@ -230,8 +230,8 @@ decode(Binary, Offset, [Type|Ts], Acc) ->
     case Type of
 	boolean ->
 	    <<_:Offset/binary, ?BOOLEAN(X0), _/binary>> = Binary,
-	    X = if X0 == 0 -> false; true -> true end,
-	    decode(Binary, Offset+1, Ts, [X | Acc]);
+	    Bool = (X0 =/= 0),
+	    decode(Binary, Offset+1, Ts, [Bool | Acc]);
 
 	byte ->
 	    <<_:Offset/binary, ?BYTE(X), _/binary>> = Binary,
@@ -264,7 +264,7 @@ decode(Binary, Offset, [Type|Ts], Acc) ->
 	    decode(Binary, Offset+2+L, Ts, [X | Acc]);
 
 	string ->
-	    Size = size(Binary),
+	    Size = byte_size(Binary),
 	    if Size < Offset + 4  ->
 		    %% empty string at end
 		    {Size, reverse(["" | Acc])};
@@ -291,11 +291,10 @@ decode(Binary, Offset, [Type|Ts], Acc) ->
 	{pad,N} -> %% pad offset to a multiple of N
 	    K = (N - (Offset rem N)) rem N,
 	    decode(Binary, Offset+K, Ts, Acc);
-	    
-	
-	'...' when Ts==[] ->
+
+	'...' when Ts =:= [] ->
 	    <<_:Offset/binary, X/binary>> = Binary,
-	    {Offset+size(X), reverse([X | Acc])}
+	    {Offset+byte_size(X), reverse([X | Acc])}
     end;
 decode(_Binary, Offset, [], Acc) ->
     {Offset, reverse(Acc)}.
@@ -361,7 +360,7 @@ i2bin(X, XLen) ->
 %% Convert a binary into an integer
 %%
 bin2i(X) ->
-    Sz = size(X)*8,
+    Sz = byte_size(X)*8,
     <<Y:Sz/big-unsigned-integer>> = X,
     Y.
 
@@ -376,17 +375,17 @@ fill(1,C) -> [C];
 fill(N,C) ->
     Cs = fill(N div 2, C),
     Cs1 = [Cs,Cs],
-    if N band 1 == 0 ->
+    if N band 1 =:= 0 ->
 	    Cs1;
        true ->
-	    [C,Cs,Cs]
+	    [C|Cs1]
     end.
 
 %% xor 2 binaries
 xor_bits(XBits, YBits) ->
-    XSz = size(XBits)*8,
-    YSz = size(YBits)*8,
-    Sz = if XSz < YSz -> XSz; true -> YSz end, %% min
+    XSz = byte_size(XBits)*8,
+    YSz = byte_size(YBits)*8,
+    Sz = erlang:min(XSz, YSz),
     <<X:Sz, _/binary>> = XBits,
     <<Y:Sz, _/binary>> = YBits,
     <<(X bxor Y):Sz>>.
@@ -464,7 +463,7 @@ rand8() ->
     (rand32() bsr 8) band 16#ff.
 
 rand32() ->
-    random:uniform(16#100000000) -1.
+    random:uniform(16#100000000) - 1.
 
 %%
 %% Base 64 encode/decode

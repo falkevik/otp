@@ -203,7 +203,7 @@ user(Pid, User, Pass, Acc) ->
 %%--------------------------------------------------------------------------
 %% account(Pid, Acc)  -> ok | {error, eacct}
 %%	Pid = pid()
-%%	Acc= string()
+%%	Acc = string()
 %%
 %% Description:  Set a user Account.
 %%--------------------------------------------------------------------------
@@ -551,7 +551,6 @@ formaterror(Tag) ->
 info(Pid) ->
     call(Pid, info, list).
 
-
 %%%========================================================================
 %%% Behavior callbacks
 %%%========================================================================
@@ -608,8 +607,8 @@ service_info(Pid) ->
 %%     flags    (for backward compatibillity)
 start_options(Options) ->
     ?fcrt("start_options", [{options, Options}]), 
-    case lists:keysearch(flags, 1, Options) of
-	{value, {flags, Flags}} ->
+    case lists:keyfind(flags, 1, Options) of
+	{flags, Flags} ->
 	    Verbose = lists:member(verbose, Flags),
 	    IsTrace = lists:member(trace, Flags), 
 	    IsDebug = lists:member(debug, Flags), 
@@ -668,14 +667,13 @@ open_options(Options) ->
     ValidateHost = 
 	fun(Host) when is_list(Host) ->
 		true;
-	   (Host) when is_tuple(Host) andalso 
-		       ((size(Host) =:= 4) orelse (size(Host) =:= 8)) ->
+	   (Host) when (tuple_size(Host) =:= 4) orelse (tuple_size(Host) =:= 8) ->
 		true;
 	   (_) ->
 		false
 	end,
     ValidatePort = 
-	fun(Port) when is_integer(Port) andalso (Port > 0) -> true;
+	fun(Port) when is_integer(Port), Port > 0 -> true;
 	   (_) -> false
 	end,
     ValidateIpFamily = 
@@ -724,8 +722,8 @@ validate_options([], ValidOptions, Acc) ->
 validate_options([{Key, Value}|Options], ValidOptions, Acc) ->
     ?fcrt("validate_options -> check", 
 	  [{key, Key}, {value, Value}, {acc, Acc}]), 
-    case lists:keysearch(Key, 1, ValidOptions) of
-	{value, {Key, Validate, _, Default}} ->
+    case lists:keyfind(Key, 1, ValidOptions) of
+	{Key, Validate, _, Default} ->
 	    case (catch Validate(Value)) of
 		true ->
 		    ?fcrt("validate_options -> check - accept", []),
@@ -759,12 +757,12 @@ init(Options) ->
     process_flag(trap_exit, true),
 
     %% Keep track of the client
-    {value, {client, Client}} = lists:keysearch(client, 1, Options), 
+    {client, Client} = lists:keyfind(client, 1, Options),
     erlang:monitor(process, Client),
 
     %% Make sure inet is started
     inet_db:start(),
-    
+
     %% Where are we
     {ok, Dir} = file:get_cwd(),
 
@@ -1047,8 +1045,7 @@ handle_call({_, {quote, Cmd}}, From, #state{chunk = false} = State) ->
     activate_ctrl_connection(State),
     {noreply, State#state{client = From, caller = quote}};
 
-handle_call({_, _Req}, _From, #state{csock = CSock} = State) 
-  when (CSock =:= undefined) ->
+handle_call({_, _Req}, _From, #state{csock = undefined} = State) ->
     {reply, {error, not_connected}, State};
 
 handle_call(_, _, #state{chunk = true} = State) ->
@@ -1295,13 +1292,7 @@ code_change(_Vsn, State1, downgrade_to_pre_5_12) ->
 	   caller    = Caller, 
 	   ipfamily  = IpFamily,
 	   progress  = Progress} = State1, 
-    IPv6Disable = 
-	if
-	    (IpFamily =:= inet) ->
-		true;
-	    true ->
-		false
-	end,
+    IPv6Disable = (IpFamily =:= inet),
     State2 = 
 	{state, CSock, DSock, Verbose, LDir, Type, Chunk, Mode, Timeout, 
 	 Data, CtrlData, Owner, Client, Caller, IPv6Disable, Progress},
@@ -1325,8 +1316,8 @@ start_link([Opts, GenServerOptions]) ->
     start_link(Opts, GenServerOptions).
 
 start_link(Opts, GenServerOptions) ->
-    case lists:keysearch(client, 1, Opts) of
-	{value, _} ->
+    case lists:keymember(client, 1, Opts) of
+	true ->
 	    %% Via the supervisor
 	    gen_server:start_link(?MODULE, Opts, GenServerOptions);
 	false ->
@@ -1420,8 +1411,7 @@ handle_ctrl_result({pos_compl, Lines},
     {NewPortAddr, _} =
 	lists:splitwith(fun(?RIGHT_PAREN) -> false; (_) -> true end, Rest),
     [A1, A2, A3, A4, P1, P2] = 
-	lists:map(fun(X) -> list_to_integer(X) end, 
-		  string:tokens(NewPortAddr, [$,])),
+	[list_to_integer(X) || X <- string:tokens(NewPortAddr, [$,])],
     IP   = {A1, A2, A3, A4}, 
     Port = (P1 * 256) + P2, 
     case connect(IP, Port, Timeout, State) of
@@ -1699,7 +1689,7 @@ handle_caller(#state{caller = {transfer_data, {Cmd, Bin, RemoteFile}}} =
     activate_ctrl_connection(State),
     {noreply, State#state{caller = {transfer_data, Bin}}}.
 
-%%  ----------- FTP SERVER COMMUNICATION  ------------------------- 
+%% ----------- FTP SERVER COMMUNICATION --------------------------
 
 %% Connect to FTP server at Host (default is TCP port 21) 
 %% in order to establish a control connection.
@@ -1880,11 +1870,11 @@ close_data_connection(#state{dsock = Socket}) ->
 close_connection(Socket) ->
     gen_tcp:close(Socket).
 
-%%  ------------ FILE HANDELING  ----------------------------------------   
+%% ------------ FILE HANDLING ----------------------------------------
 
 send_file(Fd, State) ->
     case file_read(Fd) of
-	{ok, N, Bin} when N > 0->
+	{ok, N, Bin} when N > 0 ->
 	    send_data_message(State, Bin),
 	    progress_report({binary, Bin}, State),
 	    send_file(Fd, State);
@@ -1909,7 +1899,7 @@ file_close(Fd) ->
 file_read(Fd) ->				
     case file:read(Fd, ?FILE_BUFSIZE) of
 	{ok, Bytes} ->
-	    {ok, size(Bytes), Bytes};
+	    {ok, byte_size(Bytes), Bytes};
 	eof ->
 	    {ok, 0, []};
 	Other ->
@@ -1919,7 +1909,7 @@ file_read(Fd) ->
 file_write(Bytes, Fd) ->
     file:write(Fd, Bytes).
 
-%% --------------  MISC ---------------------------------------------- 
+%% -------------- MISC ----------------------------------------------
 
 call(GenServer, Msg, Format) ->
     call(GenServer, Msg, Format, infinity).
@@ -1963,8 +1953,8 @@ pwd_result(Lines) ->
 %%     lists:member(Param, Params).
 
 key_search(Key, List, Default) ->	     
-    case lists:keysearch(Key, 1, List) of
-	{value, {_,Val}} ->
+    case lists:keyfind(Key, 1, List) of
+	{_, Val} ->
 	    Val;
 	false ->
 	    Default
@@ -2002,7 +1992,6 @@ progress_report({binary, Data}, #state{progress = ProgressPid}) ->
     ftp_progress:report(ProgressPid, {transfer_size, size(Data)});
 progress_report(Report,  #state{progress = ProgressPid}) ->
     ftp_progress:report(ProgressPid, Report).
-
 
 millisec_time() ->
     {A,B,C} = erlang:now(),

@@ -78,6 +78,8 @@
 		going_down = [], tm_started = false, early_connects = [],
 		connecting, mq = []}).
 
+-type state() :: #state{}.
+
 -define(current_protocol_version, {7,6}).
 
 -define(previous_protocol_version, {7,5}).
@@ -148,7 +150,7 @@ negotiate_protocol_impl(Nodes, Requester) ->
 check_protocol([{Node, {accept, Mon, Version, Protocol}} | Tail], Protocols) ->
     case lists:member(Protocol, Protocols) of
 	true ->
-	    case Protocol == protocol_version() of
+	    case Protocol =:= protocol_version() of
 		true -> 
 		    set({protocol, Node}, {Protocol, false});
 		false ->
@@ -235,7 +237,7 @@ start_proc(Who, Mod, Fun, Args) ->
     Args2 = [Who, Mod, Fun, Args],
     proc_lib:start_link(mnesia_sp, init_proc, Args2, infinity).
 
-terminate_proc(Who, R, State) when R /= shutdown, R /= killed ->
+terminate_proc(Who, R, State) when R =/= shutdown, R =/= killed ->
     fatal("~p crashed: ~p state: ~p~n", [Who, R, State]);
 
 terminate_proc(Who, Reason, _State) ->
@@ -251,6 +253,9 @@ terminate_proc(Who, Reason, _State) ->
 %%          {ok, State, Timeout} |
 %%          {stop, Reason}
 %%----------------------------------------------------------------------
+
+-spec init([pid()]) -> {'ok', state()} | {'stop', {'bad_config', term()}}.
+
 init([Parent]) ->
     process_flag(trap_exit, true),
     ?ets_new_table(mnesia_gvar, [set, public, named_table]), 
@@ -260,7 +265,6 @@ init([Parent]) ->
     Version = mnesia:system_info(version),
     set(version, Version),
     dbg_out("Version: ~p~n", [Version]),
-    
     case catch process_config_args(env()) of
 	ok ->
 	    mnesia_lib:set({'$$$_report', current_pos}, 0),
@@ -280,7 +284,6 @@ init([Parent]) ->
 	    set(checkpoints, []),
 	    set(pending_checkpoints, []),
 	    set(pending_checkpoint_pids, []),
-	    
 	    {ok, #state{supervisor = Parent}};
 	{'EXIT', Reason} ->
 	    mnesia_lib:report_fatal("Bad configuration: ~p~n", [Reason]),
@@ -333,7 +336,6 @@ handle_call({unsafe_mktab, Tab, Args}, _From, State) ->
 	Reply ->
 	    {reply, Reply, State}
     end;
-
 
 handle_call({open_dets, Tab, Args}, _From, State) ->
     case mnesia_lib:dets_sync_open(Tab, Args) of
@@ -395,14 +397,15 @@ handle_call({unsafe_close_log, Name}, _From, State) ->
     disk_log:close(Name),
     {reply, ok, State};
 
-handle_call({negotiate_protocol, Mon, _Version, _Protocols}, _From, State) 
-  when State#state.tm_started == false ->
-    State2 =  State#state{early_connects = [node(Mon) | State#state.early_connects]},    
+handle_call({negotiate_protocol, Mon, _Version, _Protocols}, _From,
+	    #state{early_connects = EarlyConnects,
+		   tm_started = false} = State) ->
+    State2 = State#state{early_connects = [node(Mon) | EarlyConnects]},
     {reply, {node(), {reject, self(), uninitialized, uninitialized}}, State2};
 
 %% From remote monitor..
 handle_call({negotiate_protocol, Mon, Version, Protocols}, From, State)
-  when node(Mon) /= node() ->
+  when node(Mon) =/= node() ->
     Protocol = protocol_version(),
     MyVersion = mnesia:system_info(version),
     case lists:member(Protocol, Protocols) of
@@ -457,7 +460,7 @@ accept_protocol(Mon, Version, Protocol, From, State) ->
 	false ->
 	    %% No need for wait
 	    link(Mon),  %% link to remote Monitor
-	    case Protocol == protocol_version() of
+	    case Protocol =:= protocol_version() of
 		true -> 
 		    set({protocol, Node}, {Protocol, false});
 		false ->
@@ -487,8 +490,8 @@ handle_cast({mnesia_down, mnesia_locker, Node}, State) ->
     GoingDown = lists:delete(Node, State#state.going_down),
     State2 = State#state{going_down = GoingDown},
     Pending = State#state.pending_negotiators,
-    case lists:keysearch(Node, 1, Pending) of
-	{value, {Node, Mon, ReplyTo, Reply}} ->
+    case lists:keyfind(Node, 1, Pending) of
+	{Node, Mon, ReplyTo, Reply} ->
 	    %% Late reply to remote monitor
 	    link(Mon),  %% link to remote Monitor
 	    gen_server:reply(ReplyTo, Reply),
@@ -527,24 +530,24 @@ handle_cast(Msg, State) ->
 %%          {stop, Reason, State}            (terminate/2 is called)
 %%----------------------------------------------------------------------
 
-handle_info({'EXIT', Pid, R}, State) when Pid == State#state.supervisor ->
+handle_info({'EXIT', Pid, R}, State) when Pid =:= State#state.supervisor ->
     dbg_out("~p was ~p by supervisor~n",[?MODULE, R]),
     {stop, R, State};
 
-handle_info({'EXIT', Pid, fatal}, State) when node(Pid) == node() -> 
+handle_info({'EXIT', Pid, fatal}, State) when node(Pid) =:= node() ->
     dbg_out("~p got FATAL ERROR from: ~p~n",[?MODULE, Pid]),
     exit(State#state.supervisor, shutdown),
     {noreply, State};
 
-handle_info(Msg = {'EXIT',Pid,_}, State) ->
+handle_info({'EXIT', Pid, _} = Msg, State) ->
     Node = node(Pid),
     if
-	Node /= node(), State#state.connecting == undefined ->
+	Node =/= node(), State#state.connecting =:= undefined ->
 	    %% Remotly linked process died, assume that it was a mnesia_monitor
 	    mnesia_recover:mnesia_down(Node),
 	    mnesia_controller:mnesia_down(Node),
 	    {noreply, State#state{going_down = [Node | State#state.going_down]}};
-	Node /= node() ->
+	Node =/= node() ->
 	    {noreply, State#state{mq = State#state.mq ++ [{info, Msg}]}};
 	true ->
 	    %% We have probably got an exit signal from 
@@ -554,8 +557,8 @@ handle_info(Msg = {'EXIT',Pid,_}, State) ->
 		  [?MODULE, Msg, Hint])
     end;
 
-handle_info({protocol_negotiated, From,Res}, State) ->
-    From = element(1,State#state.connecting),
+handle_info({protocol_negotiated, From, Res}, State) ->
+    From = element(1, State#state.connecting),
     gen_server:reply(From, Res),
     process_q(State#state{connecting = undefined});
 
@@ -570,7 +573,7 @@ handle_info({nodeup, Node}, State) ->
     
     if
 	%% If I'm not running the test will be made later.
-	HasDown == true, ImRunning == yes ->
+	HasDown =:= true, ImRunning =:= yes ->
 	    spawn_link(?MODULE, detect_partitioned_network, [self(), Node]);
 	true ->
 	    ignore
@@ -607,6 +610,7 @@ process_q(State = #state{mq=[{call,From,Msg}|R]}) ->
 %% Purpose: Shutdown the server
 %% Returns: any (ignored by gen_server)
 %%----------------------------------------------------------------------
+
 terminate(Reason, State) ->
     terminate_proc(?MODULE, Reason, State).
 
@@ -616,10 +620,9 @@ terminate(Reason, State) ->
 %% Returns: {ok, NewState}
 %%----------------------------------------------------------------------
 
-
 code_change(_, {state, SUP, PN, GD, TMS, EC}, _) ->
-    {ok, #state{supervisor=SUP, pending_negotiators=PN,
-		going_down = GD, tm_started =TMS, early_connects = EC}};
+    {ok, #state{supervisor = SUP, pending_negotiators = PN,
+		going_down = GD, tm_started = TMS, early_connects = EC}};
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -750,7 +753,7 @@ do_check_type(fallback_error_function, {Mod, Func})
   when is_atom(Mod), is_atom(Func) -> {Mod, Func};
 do_check_type(embedded_mnemosyne, B) -> bool(B);
 do_check_type(extra_db_nodes, L) when is_list(L) ->
-    Fun = fun(N) when N == node() -> false;
+    Fun = fun(N) when N =:= node() -> false;
 	     (A) when is_atom(A) -> true
 	  end,
     lists:filter(Fun, L);
@@ -802,7 +805,7 @@ has_remote_mnesia_down(Node) ->
     HasDown = mnesia_recover:has_mnesia_down(Node),
     Master  = mnesia_recover:get_master_nodes(schema),
     if 
-	HasDown == true, Master == [] -> 
+	HasDown =:= true, Master =:= [] ->
 	    {true, node()};
 	true ->
 	    {false, node()}

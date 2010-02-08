@@ -715,14 +715,19 @@ set_engine_latest_time(SnmpEngineID, EngineTime) ->
 %%-----------------------------------------------------------------
 %% Utility functions
 %%-----------------------------------------------------------------
+-spec error(term()) -> no_return().
 error(Reason) ->
     throw({error, Reason}).
 
+-spec error(term(), term()) -> no_return().
 error(Reason, ErrorInfo) ->
     throw({error, Reason, ErrorInfo}).
 
+-spec error(term(), term(), term()) -> no_return().
 error(Variable, Oid, SecName) ->
     error(Variable, Oid, SecName, []).
+
+-spec error(term(), term(), term(), [term()]) -> no_return().
 error(Variable, Oid, SecName, Opts) ->
     Val = inc(Variable),
     ErrorInfo = {#varbind{oid = Oid,
@@ -734,7 +739,6 @@ error(Variable, Oid, SecName, Opts) ->
 
 inc(Name) -> ets:update_counter(snmp_agent_table, Name, 1).
 
-
 get_counter(Name) ->
     case (catch ets:lookup(snmp_agent_table, Name)) of
 	[{_, Val}] ->
@@ -742,8 +746,3 @@ get_counter(Name) ->
 	_ ->
 	    0
     end.
-
-
-
-
-

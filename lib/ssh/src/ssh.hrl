@@ -38,7 +38,7 @@
 -define(UINT16(X),   X:16/unsigned-big-integer).
 -define(UINT32(X),   X:32/unsigned-big-integer).
 -define(UINT64(X),   X:64/unsigned-big-integer).
--define(STRING(X),   ?UINT32((size(X))), (X)/binary).
+-define(STRING(X),   ?UINT32((byte_size(X))), (X)/binary).
 
 %% building macros
 -define(boolean(X),

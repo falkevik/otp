@@ -183,7 +183,7 @@
 	
 	
 -include("mnesia.hrl").
--import(mnesia_lib, [val/1, dir/1]).
+-import(mnesia_lib, [dir/1]).
 -import(mnesia_lib, [exists/1, fatal/2, error/2, dbg_out/2]).
 
 trans_log_header() -> log_header(trans_log, version()).
@@ -221,16 +221,14 @@ sappend(Log, Term) ->
     ok = disk_log:log(Log, Term).  
 
 %% Write commit records to the latest_log
-log(C) when  C#commit.disc_copies == [],
-             C#commit.disc_only_copies  == [],
-             C#commit.schema_ops == [] ->
+log(#commit{disc_copies = [], disc_only_copies = [], schema_ops = []}) ->
     ignore;
 log(C) ->
     case mnesia_monitor:use_dir() of
         true ->
 	    if
 		is_record(C, commit) ->
-		    C2 =  C#commit{ram_copies = [], snmp = []},
+		    C2 = C#commit{ram_copies = [], snmp = []},
 		    append(latest_log, C2);
 		true ->
 		    %% Either a commit record as binary
@@ -244,16 +242,14 @@ log(C) ->
 
 %% Synced
 
-slog(C) when  C#commit.disc_copies == [],
-             C#commit.disc_only_copies  == [],
-             C#commit.schema_ops == [] ->
+slog(#commit{disc_copies = [], disc_only_copies = [], schema_ops = []}) ->
     ignore;
 slog(C) ->
     case mnesia_monitor:use_dir() of
         true ->
 	    if
 		is_record(C, commit) ->
-		    C2 =  C#commit{ram_copies = [], snmp = []},
+		    C2 = C#commit{ram_copies = [], snmp = []},
 		    sappend(latest_log, C2);
 		true ->
 		    %% Either a commit record as binary
@@ -269,20 +265,18 @@ slog(C) ->
 %% Stuff related to the file LOG
 
 %% Returns a list of logfiles. The oldest is first.
-log_files() -> [previous_log_file(),
-		latest_log_file(),
-		decision_tab_file()
-	       ].
+log_files() ->
+    [previous_log_file(), latest_log_file(), decision_tab_file()].
 
-latest_log_file() -> dir(latest_log_name()).
+latest_log_file() -> mnesia_lib:dir(latest_log_name()).
 
-previous_log_file() -> dir("PREVIOUS.LOG").
+previous_log_file() -> mnesia_lib:dir("PREVIOUS.LOG").
 
-decision_log_file() -> dir(decision_log_name()).
+decision_log_file() -> mnesia_lib:dir(decision_log_name()).
 
-decision_tab_file() -> dir(decision_tab_name()).
+decision_tab_file() -> mnesia_lib:dir(decision_tab_name()).
     
-previous_decision_log_file() -> dir("PDECISION.LOG").
+previous_decision_log_file() -> mnesia_lib:dir("PDECISION.LOG").
 
 latest_log_name() -> "LATEST.LOG".
 
@@ -605,7 +599,8 @@ backup(Opaque, Mod) when is_atom(Mod) ->
     backup(Opaque, [{module, Mod}]);
 backup(Opaque, Args) when is_list(Args) ->
     %% Backup all tables with max redundancy
-    CpArgs = [{ram_overrides_dump, false}, {max, val({schema, tables})}],
+    CpArgs = [{ram_overrides_dump, false},
+	      {max, mnesia_lib:val({schema, tables})}],
     case mnesia_checkpoint:activate(CpArgs) of
 	{ok, Name, _Nodes} ->
 	    Res = backup_checkpoint(Name, Opaque, Args),
@@ -724,7 +719,7 @@ backup_schema(B, Tabs) ->
 	    safe_write(B, Defs)
     end.
 
-safe_apply(B, write, [_, Items]) when Items == [] ->
+safe_apply(B, write, [_, Items]) when Items =:= [] ->
     B;
 safe_apply(B, What, Args) ->
     Abort = fun(R) -> abort_write(B, What, Args, R) end,
@@ -744,7 +739,7 @@ abort_write(B, What, Args, Reason) ->
     Opaque = B#backup_args.opaque,
     dbg_out("Failed to perform backup. M=~p:F=~p:A=~p -> ~p~n",
 	    [Mod, What, Args, Reason]),
-    case catch apply(Mod, abort_write, [Opaque]) of
+    case catch Mod:abort_write(Opaque) of
 	{ok, _Res} ->
 	    throw({error, Reason});
 	Other ->
@@ -753,24 +748,21 @@ abort_write(B, What, Args, Reason) ->
 	    throw({error, Reason})
     end.
 	
-backup_tab(Tab, B) ->
-    Name = B#backup_args.name,
+backup_tab(Tab, #backup_args{name = Name} = B) ->
     case mnesia_checkpoint:most_local_node(Name, Tab) of
-	{ok, Node} when Node == node() ->
+	{ok, Node} when Node =:= node() ->
 	    tab_copier(self(), B, Tab);
 	{ok, Node} ->
 	    RemoteB = B,
 	    Pid = spawn_link(Node, ?MODULE, tab_copier, [self(), RemoteB, Tab]),
-	    RecName = val({Tab, record_name}),
+	    RecName = mnesia_lib:val({Tab, record_name}),
 	    tab_receiver(Pid, B, Tab, RecName, 0);
 	{error, Reason} ->
 	    abort_write(B, {?MODULE, backup_tab}, [Tab, B], {error, Reason})
     end.
     
-tab_copier(Pid, B, Tab) when is_record(B, backup_args) ->
+tab_copier(Pid, #backup_args{name = Name, prev_name = PrevName} = B, Tab) ->
     %% Intentional crash at exit
-    Name = B#backup_args.name,
-    PrevName = B#backup_args.prev_name,
     {FirstName, FirstSource} = select_source(Tab, Name, PrevName),
 
     ?eval_debug_fun({?MODULE, tab_copier, pre}, [{name, Name}, {tab, Tab}]),
@@ -819,7 +811,7 @@ handle_more(Pid, B, Tab, FirstName, FirstSource, Name) ->
 	    abort_write(B, {?MODULE, backup_tab}, [Tab, B], {error, Reason})
     end.
 
-handle_last(Pid, {_Count, B}) when Pid == self() ->
+handle_last(Pid, {_Count, B}) when Pid =:= self() ->
     B;
 handle_last(Pid, _Acc) ->
     unlink(Pid),
@@ -829,8 +821,8 @@ handle_last(Pid, _Acc) ->
 iterate(B, Name, Tab, Pid, Source, Age, Pass, Acc) ->
     Fun = 
 	if
-	    Pid == self() ->
-		RecName = val({Tab, record_name}),
+	    Pid =:= self() ->
+		RecName = mnesia_lib:val({Tab, record_name}),
 		fun(Recs, A) -> copy_records(RecName, Tab, Recs, A) end;
 	    true ->
 		fun(Recs, A) -> send_records(Pid, Tab, Recs, Pass, A) end
@@ -943,7 +935,7 @@ dcd2ets(Tab, Rep) ->
 	    load_dcl(Tab, Rep); 
 	false -> %% Handle old dets files, and conversion from disc_only to disc.
 	    Fname = mnesia_lib:tab2dat(Tab),
-	    Type = val({Tab, setorbag}),
+	    Type = mnesia_lib:val({Tab, setorbag}),
 	    case mnesia_lib:dets_to_ets(Tab, Tab, Fname, Type, Rep, yes) of
 		loaded ->
 		    ets2dcd(Tab),
@@ -954,12 +946,10 @@ dcd2ets(Tab, Rep) ->
 	    end
     end.
 
-insert_dcdchunk({Cont, [LogH | Rest]}, Log, Tab) 
-  when is_record(LogH, log_header),  
-       LogH#log_header.log_kind == dcd_log, 
-       LogH#log_header.log_version >= "1.0" ->    
-    insert_dcdchunk({Cont, Rest}, Log, Tab);   
-
+insert_dcdchunk({Cont, [#log_header{log_kind = dcd_log,
+				    log_version = Log_version}|Rest]},
+		Log, Tab) when Log_version >= "1.0" ->
+    insert_dcdchunk({Cont, Rest}, Log, Tab);
 insert_dcdchunk({Cont, Recs}, Log, Tab) ->     
     true = ets:insert(Tab, Recs),
     insert_dcdchunk(chunk_log(Log, Cont), Log, Tab);
@@ -1013,10 +1003,8 @@ add_recs([{{Tab, Key}, Val, update_counter} | Rest], N) ->
 	    true = ets:insert(Tab, Zero)
     end,
     add_recs(Rest, N+1);
-add_recs([LogH|Rest], N) 
-  when is_record(LogH, log_header),  
-       LogH#log_header.log_kind == dcl_log, 
-       LogH#log_header.log_version >= "1.0" ->    
+add_recs([#log_header{log_kind = dcl_log, log_version = Log_version}|Rest], N)
+  when Log_version >= "1.0" ->
     add_recs(Rest, N);
 add_recs([{{Tab, _Key}, _Val, clear_table} | Rest], N) ->
     true = ets:match_delete(Tab, '_'),

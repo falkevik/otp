@@ -252,7 +252,7 @@ running_nodes(Ns) ->
 
 is_running_remote() ->
     IsRunning = is_running(),
-    {IsRunning == yes, node()}.
+    {IsRunning =:= yes, node()}.
 
 is_running(Node) when is_atom(Node) ->
     case rpc:call(Node, ?MODULE, is_running, []) of
@@ -284,7 +284,7 @@ pad_name([], Len, Tail) ->
 %% Some utility functions .....
 active_here(Tab) ->
     case val({Tab, where_to_read}) of
-	Node when Node == node() -> true;
+	Node when Node =:= node() -> true;
 	_ -> false
     end.
 
@@ -293,7 +293,7 @@ not_active_here(Tab) ->
 
 exists(Fname) ->
     case file:open(Fname, [raw,read]) of
-	{ok, F} ->file:close(F), true;
+	{ok, F} -> file:close(F), true;
 	_ -> false
     end.
 
@@ -329,7 +329,7 @@ cs_to_storage_type(Node, Cs) ->
 
 schema_cs_to_storage_type(Node, Cs) ->
     case cs_to_storage_type(Node, Cs) of
-	unknown when Cs#cstruct.name == schema -> ram_copies;
+	unknown when Cs#cstruct.name =:= schema -> ram_copies;
 	Other -> Other
     end.
 
@@ -396,7 +396,7 @@ other_val(Var, Other) ->
 	    pr_other(Var, Other)
     end.
 
--spec(pr_other/2 :: (_,_) -> no_return()).
+-spec pr_other(_, _) -> no_return().
 
 pr_other(Var, Other) ->
     Why = 
@@ -429,12 +429,12 @@ del(Var, Val) ->
 
 %% LSort -> [node()| Sorted] == Locker sorted
 
-add_lsort(Var, Val) when node() == Val ->
+add_lsort(Var, Val) when node() =:= Val ->
     L = val(Var),
     set(Var, [Val | lists:delete(Val, L)]);
 add_lsort(Var,Val) ->
     case val(Var) of
-	[Head|Rest] when Head == node() ->
+	[Head|Rest] when Head =:= node() ->
 	    set(Var,[Head|lsort_add(Val,Rest)]);
 	List ->
 	    set(Var,lsort_add(Val,List))
@@ -489,14 +489,13 @@ etype(_) -> othertype.
 remote_copy_holders(Cs) ->
     copy_holders(Cs) -- [node()].
 
-copy_holders(Cs) when Cs#cstruct.local_content == false ->
+copy_holders(#cstruct{local_content = false} = Cs) ->
     cs_to_nodes(Cs);
-copy_holders(Cs) when Cs#cstruct.local_content == true ->
+copy_holders(#cstruct{local_content = true} = Cs) ->
     case lists:member(node(), cs_to_nodes(Cs)) of
 	true -> [node()];
 	false -> []
     end.
-
 
 set_remote_where_to_read(Tab) ->
     set_remote_where_to_read(Tab, []).
@@ -685,7 +684,7 @@ locking_procs(LockList) when is_list(LockList) ->
     UT = uniq(Tids),    
     Info = fun(Tid) ->
 		   Pid = Tid#tid.pid,
-		   case node(Pid) == node() of
+		   case node(Pid) =:= node() of
 		       true -> 
 			   {true, {Pid, catch process_info(Pid)}};
 		       _ ->
@@ -843,7 +842,7 @@ error_desc({error, Reason}) ->
     error_desc(Reason);
 error_desc({aborted, Reason}) ->
     error_desc(Reason);
-error_desc(Reason) when is_tuple(Reason), size(Reason) > 0 ->
+error_desc(Reason) when tuple_size(Reason) > 0 ->
     setelement(1, Reason, error_desc(element(1, Reason)));
 error_desc(Reason) ->
     Reason.
@@ -1288,7 +1287,7 @@ eval_debug_fun(FunId, EvalContext, EvalFile, EvalLine) ->
 	    NewContext = Fun(OldContext, EvalContext),
 	    
 	    case catch ?ets_lookup(?DEBUG_TAB, FunId) of
-		[Info] when NewContext /= OldContext ->
+		[Info] when NewContext =/= OldContext ->
 		    NewInfo = Info#debug_info{context = NewContext},
 		    update_debug_info(NewInfo);
 		_ ->

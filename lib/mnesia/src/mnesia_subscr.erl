@@ -124,9 +124,9 @@ report_table_event(Tab, Tid, Obj, Op) ->
     case ?catch_val({Tab, commit_work}) of
 	{'EXIT', _} -> ok;
 	Commit ->
-	    case lists:keysearch(subscribers, 1, Commit) of
+	    case lists:keyfind(subscribers, 1, Commit) of
 		false -> ok;
-		{value, Subs} -> 
+		Subs ->
 		    report_table_event(Subs, Tab, Tid, Obj, Op, undefined)
 	    end
     end.
@@ -322,10 +322,10 @@ do_change({deactivate_table, Tab}, SubscrTab) ->
 	{'EXIT', _} ->
 	    {error, {no_exists, Tab}};
 	CommitWork ->
-	    case lists:keysearch(subscribers, 1, CommitWork) of
+	    case lists:keyfind(subscribers, 1, CommitWork) of
 		false ->
 		    ok;
-		{value, Subs} -> 
+		Subs ->
 		    Simple   = {table, Tab, simple}, 
 		    Detailed = {table, Tab, detailed}, 
 		    Fs = fun(C) -> deactivate(C, Simple, Var, SubscrTab) end,
@@ -348,15 +348,12 @@ activate(ClientPid, What, Var, OldSubscribers, SubscrTab) ->
 	if Var == subscribers -> 
 		OldSubscribers;
 	   true -> 
-		case lists:keysearch(subscribers, 1, OldSubscribers) of
+		case lists:keyfind(subscribers, 1, OldSubscribers) of
 		    false -> [];
-		{value, Subs} -> 
-			case Subs of
-			    {subscribers, L1, L2} -> 
-				L1 ++ L2;
-			    {subscribers, L1} ->
-				L1
-			end
+		    {subscribers, L1, L2} ->
+			L1 ++ L2;
+		    {subscribers, L1} ->
+			L1
 		end
 	end,
     case lists:member(ClientPid, Old) of
@@ -381,7 +378,7 @@ add_subscr(subscribers, _What, Pid) ->
     {ok, node()};
 add_subscr({Tab, commit_work}, What, Pid) ->
     Commit = mnesia_lib:val({Tab, commit_work}),
-    case lists:keysearch(subscribers, 1, Commit) of
+    case lists:keyfind(subscribers, 1, Commit) of
 	false ->
 	    Subscr = 
 		case What of 
@@ -393,7 +390,7 @@ add_subscr({Tab, commit_work}, What, Pid) ->
 	    mnesia_lib:add({Tab, subscribers}, Pid),
 	    mnesia_lib:set({Tab, commit_work}, 
 			   mnesia_lib:sort_commit([Subscr | Commit]));
-	{value, Old} ->
+	Old ->
 	    {L1, L2} = 
 		case Old of
 		    {subscribers, L} ->  %% Old Way
@@ -429,10 +426,10 @@ del_subscr(subscribers, _What, Pid) ->
     mnesia_lib:del(subscribers, Pid);
 del_subscr({Tab, commit_work}, What, Pid) ->
     Commit = mnesia_lib:val({Tab, commit_work}),
-    case lists:keysearch(subscribers, 1, Commit) of
+    case lists:keyfind(subscribers, 1, Commit) of
 	false ->
 	    false;
-	{value, Old} ->
+	Old ->
 	    {L1, L2} = 
 		case Old of
 		    {subscribers, L} ->  %% Old Way

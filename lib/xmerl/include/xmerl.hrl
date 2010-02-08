@@ -82,6 +82,7 @@
 	  xmlbase="",           % string() XML Base path, for relative URI:s
 	  elementdef=undeclared % atom(), one of [undeclared | prolog | external | element]
 	 }).
+-type xmlElement() :: #xmlElement{}.
 
 %% plain text
 %% IOlist = [char() | binary () | IOlist]
@@ -125,6 +126,7 @@
 		     namespace = [],
 		     whole_document
 		    }).
+-type xmlContext() :: #xmlContext{}.
 
 -record(xmlNode, {
 		  type = element,
@@ -183,7 +185,7 @@
 	  line = 1,
           common_data = []
 	 }).
-
+-type xmerl_scanner() :: #xmerl_scanner{}.
 
 
 

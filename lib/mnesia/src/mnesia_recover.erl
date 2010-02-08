@@ -65,14 +65,16 @@
 -include("mnesia.hrl").
 -import(mnesia_lib, [set/2, verbose/2, error/2, fatal/2]).
 
--record(state, {supervisor,
+-record(state, {supervisor        :: pid(),
 		unclear_pid,
-		unclear_decision,
+		unclear_decision  :: #decision{},
 		unclear_waitfor,
 		tm_queue_len = 0,
-		initiated = false,
+		initiated = false :: boolean(),
 		early_msgs = []
 	       }).
+
+-type state() :: #state{}.
 
 %%-define(DBG(F, A), mnesia:report_event(list_to_atom(lists:flatten(io_lib:format(F, A))))).
 %%-define(DBG(F, A), io:format("DBG: " ++ F, A)).
@@ -175,7 +177,7 @@ multicall(Nodes, Msg) ->
 cast(Msg) ->
     case whereis(?MODULE) of
 	undefined -> ignore;
-	Pid ->  gen_server:cast(Pid, Msg)
+	Pid -> gen_server:cast(Pid, Msg)
     end.
 
 abcast(Nodes, Msg) ->
@@ -197,16 +199,17 @@ note_master_nodes(Tab, Nodes) when is_list(Nodes) ->
     Master = {master_nodes, Tab, Nodes},
     ?ets_insert(mnesia_decision, Master).
 
-note_outcome(D) when D#decision.disc_nodes == [] ->
+note_outcome(#decision{disc_nodes = [], outcome = Outcome, tid = Tid}) ->
 %%    ?DBG("~w: note_tmp_decision: ~w~n", [node(), D]),
-    note_decision(D#decision.tid, filter_outcome(D#decision.outcome)),
-    ?ets_delete(mnesia_decision, D#decision.tid);
-note_outcome(D) when D#decision.disc_nodes /= [] ->
+    note_decision(Tid, filter_outcome(Outcome)),
+    ?ets_delete(mnesia_decision, Tid);
+note_outcome(#decision{} = D) ->
 %%    ?DBG("~w: note_decision: ~w~n", [node(), D]),
     ?ets_insert(mnesia_decision, D).
 
-do_log_decision(D) when D#decision.outcome /= unclear ->
-    OldD = decision(D#decision.tid),
+do_log_decision(#decision{outcome = Outcome, tid = Tid} = D)
+  when Outcome =/= unclear ->
+    OldD = decision(Tid),
     MergedD = merge_decisions(node(), OldD, D),
     do_log_decision(MergedD, true, D);
 do_log_decision(D) ->
@@ -226,7 +229,7 @@ do_log_decision(D, DoTell, NodeD) ->
 	true ->
 	    mnesia_log:append(latest_log, D2),
 	    if
-		DoTell == true, Outcome /= unclear ->
+		DoTell =:= true, Outcome =/= unclear ->
 		    tell_im_certain(NodeD#decision.disc_nodes--[node()],D2),
 		    tell_im_certain(NodeD#decision.ram_nodes--[node()], D2);
 		true ->
@@ -240,7 +243,7 @@ tell_im_certain([], _D) ->
     ignore;
 tell_im_certain(Nodes, D) ->
     Msg = {im_certain, node(), D},
-  %%  mnesia_lib:verbose("~w: tell: ~w~n", [Msg, Nodes]), 
+    %% mnesia_lib:verbose("~w: tell: ~w~n", [Msg, Nodes]),
     abcast(Nodes, Msg).
 
 sync() ->
@@ -279,9 +282,9 @@ mnesia_down(Node) ->
 
 log_master_nodes(Args, UseDir, IsRunning) ->
     if
-	IsRunning == yes ->
+	IsRunning =:= yes ->
 	    log_master_nodes2(Args, UseDir, IsRunning, ok);
-	UseDir == false ->
+	UseDir =:= false ->
 	    ok;
 	true ->
 	    Name = latest_log,
@@ -293,10 +296,10 @@ log_master_nodes(Args, UseDir, IsRunning) ->
 		{ok, Name} ->
 		    log_master_nodes2(Args, UseDir, IsRunning, ok);
 		{repaired, Name, {recovered,  _R}, {badbytes, _B}}
-		  when Exists == true ->
+		  when Exists =:= true ->
 		    log_master_nodes2(Args, UseDir, IsRunning, ok);
 		{repaired, Name, {recovered,  _R}, {badbytes, _B}}
-		  when Exists == false ->
+		  when Exists =:= false ->
 		    mnesia_log:write_trans_log_header(),
 		    log_master_nodes2(Args, UseDir, IsRunning, ok);
 		{error, Reason} ->
@@ -392,9 +395,9 @@ check_what_happened([H | T], Aborts, Commits) ->
     end;
 check_what_happened([], Aborts, Commits) ->
     if
-	Aborts == 0, Commits == 0 -> aborted;  % None of the active nodes knows
-	Aborts > 0 -> aborted;                 % Someody has aborted
-	Aborts == 0, Commits > 0 -> committed  % All has committed
+	Aborts =:= 0, Commits =:= 0 -> aborted; % None of the active nodes knows
+	Aborts > 0 -> aborted;                  % Somebody has aborted
+	Aborts =:= 0, Commits > 0 -> committed  % All have committed
     end.
 
 %% Determine what has happened to the transaction
@@ -403,7 +406,7 @@ wait_for_decision(presume_commit, _InitBy) ->
     %% sym_trans
     {{presume_commit, self()}, committed};
 
-wait_for_decision(D, InitBy) when D#decision.outcome == presume_abort ->
+wait_for_decision(#decision{outcome = presume_abort} = D, InitBy) ->
     wait_for_decision(D, InitBy, 0).
     
 wait_for_decision(D, InitBy, N) -> 
@@ -421,12 +424,12 @@ wait_for_decision(D, InitBy, N) ->
 		    timer:sleep(10),
 		    wait_for_decision(D, InitBy, N+1)
 	    end;
-	InitBy /= startup ->
+	InitBy =/= startup ->
 	    %% Wait a while for active transactions
 	    %% to end and try again
 	    timer:sleep(100), 
 	    wait_for_decision(D, InitBy, N);
-	InitBy == startup ->
+	InitBy =:= startup ->
 	    {ok, Res} = call({wait_for_decision, D}),
 	    {Tid, Res}
     end.
@@ -480,7 +483,7 @@ dump_decision_log(InitBy) ->
 
 perform_dump_decision_log(eof, _InitBy) ->
     confirm_decision_log_dump();
-perform_dump_decision_log(Cont, InitBy) when InitBy == startup ->
+perform_dump_decision_log(Cont, InitBy) when InitBy =:= startup ->
     case mnesia_log:chunk_decision_log(Cont) of
 	{Cont2, Decisions} ->
 	    note_log_decisions(Decisions, InitBy),
@@ -506,11 +509,9 @@ note_log_decisions([What | Tail], InitBy) ->
 note_log_decisions([], _InitBy) ->
     ok.
 
-note_log_decision(NewD, InitBy) when NewD#decision.outcome == pre_commit ->
+note_log_decision(#decision{outcome = pre_commit} = NewD, InitBy) ->
     note_log_decision(NewD#decision{outcome = unclear}, InitBy);
-
-note_log_decision(NewD, _InitBy) when is_record(NewD, decision) ->
-    Tid = NewD#decision.tid,
+note_log_decision(#decision{tid = Tid} = NewD, _InitBy) ->
     sync_trans_tid_serial(Tid),
     note_outcome(NewD);
 note_log_decision({trans_tid, serial, _Serial}, startup) ->
@@ -523,22 +524,24 @@ note_log_decision({mnesia_down, Node, Date, Time}, _InitBy) ->
     note_down(Node, Date, Time);
 note_log_decision({master_nodes, Tab, Nodes}, _InitBy) ->
     note_master_nodes(Tab, Nodes);
-note_log_decision(H, _InitBy) when H#log_header.log_kind == decision_log ->
+note_log_decision(#log_header{log_kind = decision_log,
+			      log_version = Log_version} = H, _InitBy) ->
     V = mnesia_log:decision_log_version(),
     if
-	H#log_header.log_version == V->
+	Log_version =:= V ->
 	    ok;
-	H#log_header.log_version == "2.0" ->
+	Log_version =:= "2.0" ->
 	    verbose("Accepting an old version format of decision log: ~p~n",
 		    [V]),
 	    ok;
 	true ->
 	    fatal("Bad version of decision log: ~p~n", [H])
     end;
-note_log_decision(H, _InitBy) when H#log_header.log_kind == decision_tab ->
+note_log_decision(#log_header{log_kind = decision_tab,
+			      log_version = Log_version} = H, _InitBy) ->
     V = mnesia_log:decision_tab_version(),
     if
-	V == H#log_header.log_version ->
+	V =:= Log_version ->
 	    ok;
 	true ->
 	    fatal("Bad version of decision tab: ~p~n", [H])
@@ -579,6 +582,9 @@ sync_trans_tid_serial(Tid) ->
 %%          {ok, State, Timeout} |
 %%          {stop, Reason}
 %%----------------------------------------------------------------------
+
+-spec init([pid()]) -> {'ok', state()}.
+
 init([Parent]) ->
     process_flag(trap_exit, true),
     mnesia_lib:verbose("~p starting: ~p~n", [?MODULE, self()]),
@@ -600,7 +606,7 @@ create_transient_decision() ->
 %%          {stop, Reason, Reply, State}   | (terminate/2 is called)
 %%----------------------------------------------------------------------
 
-handle_call(init, From, State) when State#state.initiated == false ->
+handle_call(init, From, #state{initiated = false} = State) ->
     Args = [{keypos, 2}, set, public, named_table],
     case mnesia_monitor:use_dir() of
 	true ->
@@ -621,9 +627,9 @@ handle_call(init, From, State) when State#state.initiated == false ->
     end,
     handle_early_msgs(State, From);
 
-handle_call(Msg, From, State) when State#state.initiated == false ->
+handle_call(Msg, From, #state{initiated = false,
+			      early_msgs = Msgs} = State) ->
     %% Buffer early messages
-    Msgs = State#state.early_msgs,
     {noreply, State#state{early_msgs = [{call, Msg, From} | Msgs]}};
 
 handle_call({disconnect, Node}, _From, State) ->
@@ -674,7 +680,7 @@ handle_call({wait_for_decision, D}, From, State) ->
     AliveRam = (mnesia_lib:intersect(D#decision.ram_nodes, Recov) -- [node()]),
     RemoteDisc = D#decision.disc_nodes -- [node()],
     if
-	AliveRam == [], RemoteDisc == [] ->
+	AliveRam =:= [], RemoteDisc =:= [] ->
 	    %% No more else to wait for and we may safely abort
 	    {reply, {ok, aborted}, State};
 	true ->
@@ -765,9 +771,8 @@ do_log_master_nodes(Tab, Nodes, UseDir, IsRunning) ->
 %%          {stop, Reason, State}            (terminate/2 is called)
 %%----------------------------------------------------------------------
 
-handle_cast(Msg, State) when State#state.initiated == false ->
+handle_cast(Msg, #state{early_msgs = Msgs, initiated = false} = State) ->
     %% Buffer early messages
-    Msgs = State#state.early_msgs,
     {noreply, State#state{early_msgs = [{cast, Msg} | Msgs]}};
 
 handle_cast({im_certain, Node, NewD}, State) ->
@@ -795,7 +800,7 @@ handle_cast({what_decision, Node, OtherD}, State) ->
     Decision = 
 	case decision(Tid) of
 	    no_decision -> OtherD;
-	    MyD when is_record(MyD, decision) -> MyD
+	    #decision{} = MyD -> MyD
 	end,
     announce([Node], [Decision], [], true),
     {noreply, State};
@@ -830,23 +835,21 @@ handle_cast(Msg, State) ->
 %%----------------------------------------------------------------------
 
 %% No need for buffering
-%% handle_info(Msg, State) when State#state.initiated == false ->
+%% handle_info(Msg, State) when State#state.initiated =:= false ->
 %%     %% Buffer early messages
 %%     Msgs = State#state.early_msgs,
 %%     {noreply, State#state{early_msgs = [{info, Msg} | Msgs]}};
 
 handle_info({connect_nodes, Ns, From}, State) ->
-    handle_call({connect_nodes,Ns},From,State);
+    handle_call({connect_nodes,Ns}, From, State);
 
 handle_info(check_overload, S) ->
     %% Time to check if mnesia_tm is overloaded
     case whereis(mnesia_tm) of
 	Pid when is_pid(Pid) ->
-	    
 	    Threshold = 100,
 	    Prev = S#state.tm_queue_len,
-	    {message_queue_len, Len} =
-		process_info(Pid, message_queue_len),
+	    {message_queue_len, Len} = process_info(Pid, message_queue_len),
 	    if
 		Len > Threshold, Prev > Threshold ->
 		    What = {mnesia_tm, message_queue_len, [Prev, Len]},
@@ -870,9 +873,8 @@ handle_info(garb_decisions, State) ->
 handle_info({force_decision, Tid}, State) ->
     %% Enforce a transaction recovery decision,
     %% if we still are waiting for the outcome
-    
     case State#state.unclear_decision of
-	U when U#decision.tid == Tid ->
+	#decision{tid = Tid} = U ->
 	    verbose("Decided to abort transaction ~p since "
 		    "max_wait_for_decision has been exceeded~n",
 		    [Tid]),
@@ -883,8 +885,8 @@ handle_info({force_decision, Tid}, State) ->
 	    {noreply, State}
     end;
 
-handle_info({'EXIT', Pid, R}, State) when Pid == State#state.supervisor ->
-    mnesia_lib:dbg_out("~p was ~p~n",[?MODULE, R]),
+handle_info({'EXIT', Pid, R}, #state{supervisor = Pid} = State) ->
+    mnesia_lib:dbg_out("~p was ~p~n", [?MODULE, R]),
     {stop, shutdown, State};
 
 handle_info(Msg, State) ->
@@ -905,6 +907,9 @@ terminate(Reason, State) ->
 %% Purpose: Upgrade process when its code is to be changed
 %% Returns: {ok, NewState}
 %%----------------------------------------------------------------------
+
+-spec code_change(term(), state(), term()) -> {'ok', state()}.
+
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -956,14 +961,11 @@ decision(Tid) ->
 
 decision(Tid, [Tab | Tabs]) ->
     case catch ?ets_lookup(Tab, Tid) of
-	[D] when is_record(D, decision) ->
+	[#decision{} = D] ->
 	    D;
-	[C] when is_record(C, transient_decision) ->
-	    #decision{tid = C#transient_decision.tid,
-		      outcome =  C#transient_decision.outcome,
-		      disc_nodes = [],
-		      ram_nodes = []
-		     };
+	[#transient_decision{outcome = Outcome, tid = Tid1}] ->
+	    #decision{tid = Tid1, outcome = Outcome,
+		      disc_nodes = [], ram_nodes = []};
 	[] ->
 	    decision(Tid, Tabs);
 	{'EXIT', _} ->
@@ -995,7 +997,7 @@ filter_outcome(Val) ->
 	pre_commit -> unclear
     end.
 
-filter_aborted(D) when D#decision.outcome == presume_abort ->
+filter_aborted(#decision{outcome = presume_abort} = D) ->
     D#decision{outcome = aborted};
 filter_aborted(D) ->
     D.
@@ -1004,10 +1006,10 @@ filter_aborted(D) ->
 merge_decisions(Node, D, NewD0) ->
     NewD = filter_aborted(NewD0),
     if
-	D == no_decision, node() /= Node ->
+	D =:= no_decision, node() =/= Node ->
 	    %% We did not know anything about this txn
 	    NewD#decision{disc_nodes = []};
-	D == no_decision ->
+	D =:= no_decision ->
 	    NewD;
 	is_record(D, decision) ->
 	    DiscNs = D#decision.disc_nodes -- ([node(), Node]),
@@ -1015,16 +1017,16 @@ merge_decisions(Node, D, NewD0) ->
 %%	    mnesia_lib:dbg_out("merge ~w: NewD = ~w~n D = ~w~n OldD = ~w~n", 
 %%			       [Node, NewD, D, OldD]),
 	    if
-		OldD#decision.outcome == unclear,
-		NewD#decision.outcome == unclear ->
+		OldD#decision.outcome =:= unclear,
+		NewD#decision.outcome =:= unclear ->
 		    D;
 
-		OldD#decision.outcome == NewD#decision.outcome ->
+		OldD#decision.outcome =:= NewD#decision.outcome ->
 		    %% We have come to the same decision
 		    OldD;
 
-		OldD#decision.outcome == committed,
-		NewD#decision.outcome == aborted ->
+		OldD#decision.outcome =:= committed,
+		NewD#decision.outcome =:= aborted ->
 		    %% Interesting! We have already committed,
 		    %% but someone else has aborted. Now we
 		    %% have a nice little inconcistency. The
@@ -1039,42 +1041,37 @@ merge_decisions(Node, D, NewD0) ->
 		    mnesia_lib:report_system_event(Msg),
 		    OldD#decision{outcome = aborted};
 
-		OldD#decision.outcome == aborted ->
+		OldD#decision.outcome =:= aborted ->
 		    %% aborted overrrides anything
 		    OldD#decision{outcome = aborted};
 
-		NewD#decision.outcome == aborted ->
+		NewD#decision.outcome =:= aborted ->
 		    %% aborted overrrides anything
 		    OldD#decision{outcome = aborted};
 
-		OldD#decision.outcome == committed,
-		NewD#decision.outcome == unclear ->
+		OldD#decision.outcome =:= committed,
+		NewD#decision.outcome =:= unclear ->
 		    %% committed overrides unclear
 		    OldD#decision{outcome = committed};
 
-		OldD#decision.outcome == unclear,
-		NewD#decision.outcome == committed ->
+		OldD#decision.outcome =:= unclear,
+		NewD#decision.outcome =:= committed ->
 		    %% committed overrides unclear
 		    OldD#decision{outcome = committed}
 	    end
     end.
 
-add_remote_decisions(Node, [D | Tail], State) when is_record(D, decision) ->
+add_remote_decisions(Node, [#decision{} = D | Tail], State) ->
     State2 = add_remote_decision(Node, D, State),
     add_remote_decisions(Node, Tail, State2);
-
-add_remote_decisions(Node, [C | Tail], State)
-        when is_record(C, transient_decision) ->
-    D = #decision{tid = C#transient_decision.tid,
-		  outcome = C#transient_decision.outcome,
-		  disc_nodes = [],
-		  ram_nodes = []},
+add_remote_decisions(Node, [#transient_decision{outcome = Outcome,
+						tid = Tid} | Tail], State) ->
+    D = #decision{tid = Tid, outcome = Outcome,
+		  disc_nodes = [], ram_nodes = []},
     State2 = add_remote_decision(Node, D, State),
     add_remote_decisions(Node, Tail, State2);
-
 add_remote_decisions(Node, [{mnesia_down, _, _, _} | Tail], State) ->
     add_remote_decisions(Node, Tail, State);
-
 add_remote_decisions(Node, [{trans_tid, serial, Serial} | Tail], State) ->
     sync_trans_tid_serial(Serial),
     case State#state.unclear_decision of
@@ -1089,7 +1086,6 @@ add_remote_decisions(Node, [{trans_tid, serial, Serial} | Tail], State) ->
 	    end
     end,
     add_remote_decisions(Node, Tail, State);
-
 add_remote_decisions(_Node, [], State) ->
     State.
 
@@ -1100,9 +1096,9 @@ add_remote_decision(Node, NewD, State) ->
     do_log_decision(D, false, undefined),
     Outcome = D#decision.outcome,
     if
-	OldD == no_decision ->
+	OldD =:= no_decision ->
 	    ignore;
-	Outcome == unclear ->
+	Outcome =:= unclear ->
 	    ignore;
 	true ->
 	    case lists:member(node(), NewD#decision.disc_nodes) or
@@ -1114,10 +1110,10 @@ add_remote_decision(Node, NewD, State) ->
 	    end
     end,
     case State#state.unclear_decision of
-	U when U#decision.tid == Tid ->
+	#decision{tid = Tid} ->
 	    WaitFor = State#state.unclear_waitfor -- [Node],
 	    if
-		Outcome == unclear, WaitFor == [] ->
+		Outcome =:= unclear, WaitFor =:= [] ->
 		    %% Everybody are uncertain, lets abort
 		    NewOutcome = aborted,
 		    CertainD = D#decision{outcome = NewOutcome, 
@@ -1133,14 +1129,14 @@ add_remote_decision(Node, NewD, State) ->
 		    State#state{unclear_pid = undefined,
 				unclear_decision = undefined,
 				unclear_waitfor = undefined};
-		Outcome /= unclear ->
+		Outcome =/= unclear ->
 		    verbose("~p told us that transaction ~p was ~p~n",
 			    [Node, Tid, Outcome]),
 		    gen_server:reply(State#state.unclear_pid, {ok, Outcome}),
 		    State#state{unclear_pid = undefined,
 				unclear_decision = undefined,
 				unclear_waitfor = undefined};
-		Outcome == unclear ->
+		Outcome =:= unclear ->
 		    State#state{unclear_waitfor = WaitFor}
 	    end;
 	_ ->
@@ -1166,10 +1162,11 @@ send_decisions([{Node, Decisions} | Tail]) ->
 send_decisions([]) ->
     ok.
 
-arrange([To | ToNodes], D, Acc, ForceSend) when is_record(D, decision) ->
-    NeedsAdd = (ForceSend or
-		lists:member(To, D#decision.disc_nodes) or
-		lists:member(To, D#decision.ram_nodes)),
+arrange([To | ToNodes], #decision{disc_nodes = DiscNodes,
+				  ram_nodes = RamNodes} = D, Acc, ForceSend) ->
+    NeedsAdd = (ForceSend orelse
+		lists:member(To, DiscNodes) orelse
+		lists:member(To, RamNodes)),
     case NeedsAdd of
 	true ->
 	    Acc2 = add_decision(To, D, Acc),
@@ -1177,13 +1174,11 @@ arrange([To | ToNodes], D, Acc, ForceSend) when is_record(D, decision) ->
 	false ->
 	    arrange(ToNodes, D, Acc, ForceSend)
     end;
-
 arrange([To | ToNodes], {trans_tid, serial, Serial}, Acc, ForceSend) ->
     %% Do the lamport thing plus release the others
     %% from uncertainity.
     Acc2 = add_decision(To, {trans_tid, serial, Serial}, Acc),
     arrange(ToNodes, {trans_tid, serial, Serial}, Acc2, ForceSend);
-
 arrange([], _Decision, Acc, _ForceSend) ->
     Acc.
 
@@ -1193,4 +1188,3 @@ add_decision(Node, Decision, [Head | Tail]) ->
     [Head | add_decision(Node, Decision, Tail)];
 add_decision(Node, Decision, []) ->
     [{Node, [Decision]}].
-

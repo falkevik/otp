@@ -307,14 +307,13 @@ cancel_tcpip_forward(ConnectionManager, BindIP, Port) ->
 %%% Internal API
 %%--------------------------------------------------------------------
 channel_data(ChannelId, DataType, Data, Connection, ConnectionPid, From) 
-  when is_list(Data)->
+  when is_list(Data) ->
     channel_data(ChannelId, DataType, 
 		 list_to_binary(Data), Connection, ConnectionPid, From);
 
 channel_data(ChannelId, DataType, Data, 
 	     #connection{channel_cache = Cache} = Connection, ConnectionPid,
 	     From) ->
-    
     case ssh_channel:cache_lookup(Cache, ChannelId) of
 	#channel{remote_id = Id} = Channel0 ->
 	    {SendList, Channel} = update_send_window(Channel0, DataType, 
@@ -339,7 +338,6 @@ handle_msg(#ssh_msg_channel_open_confirmation{recipient_channel = ChannelId,
 					      initial_window_size = WindowSz,
 					      maximum_packet_size = PacketSz}, 
 	   #connection{channel_cache = Cache} = Connection0, _, _) ->
-    
     #channel{remote_id = undefined} = Channel =
 	ssh_channel:cache_lookup(Cache, ChannelId), 
     
@@ -408,7 +406,7 @@ handle_msg(#ssh_msg_channel_data{recipient_channel = ChannelId,
     
     #channel{recv_window_size = Size} = Channel =
 	ssh_channel:cache_lookup(Cache, ChannelId), 
-    WantedSize = Size - size(Data),
+    WantedSize = Size - byte_size(Data),
     ssh_channel:cache_update(Cache, Channel#channel{
 				      recv_window_size = WantedSize}),
     {Replies, Connection} = 
@@ -422,7 +420,7 @@ handle_msg(#ssh_msg_channel_extended_data{recipient_channel = ChannelId,
     
     #channel{recv_window_size = Size} = Channel =
 	ssh_channel:cache_lookup(Cache, ChannelId), 
-    WantedSize = Size - size(Data),
+    WantedSize = Size - byte_size(Data),
     ssh_channel:cache_update(Cache, Channel#channel{
 				      recv_window_size = WantedSize}),
     {Replies, Connection} = 
@@ -455,9 +453,7 @@ handle_msg(#ssh_msg_channel_open{channel_type = "session" = Type,
 	   ConnectionPid, server) ->
    
     try setup_session(Connection0, ConnectionPid, ChannelId,
-		     Type, WindowSz, PacketSz) of
-	Result ->
-	    Result
+		     Type, WindowSz, PacketSz)
     catch _:_ ->
 	    FailMsg = channel_open_failure_msg(ChannelId, 
 					       ?SSH_OPEN_CONNECT_FAILED,
@@ -744,8 +740,7 @@ handle_msg(#ssh_msg_global_request{name = _Type,
 
 %%% This transport message will also be handled at the connection level
 handle_msg(#ssh_msg_disconnect{code = Code,
-			      description = Description,
-			      language = _Lang }, 
+			       description = Description},
 	   #connection{channel_cache = Cache} = Connection0, _, _) ->
     {Connection, Replies} = 
 	ssh_channel:cache_foldl(fun(Channel, {Connection1, Acc}) ->
@@ -853,14 +848,13 @@ unbind(IP, Port, Connection) ->
       lists:keydelete({IP, Port}, 1,
 		      Connection#connection.port_bindings)}.
 unbind_channel(ChannelPid, Connection) ->
-    Binds = [{Bind, ChannelP} || {Bind, ChannelP} 
-				     <- Connection#connection.port_bindings, 
-				 ChannelP =/= ChannelPid],
+    Binds = [T || {_Bind, ChannelP} = T <- Connection#connection.port_bindings,
+		  ChannelP =/= ChannelPid],
     Connection#connection{port_bindings = Binds}.
 
 bound_channel(IP, Port, Connection) ->
-    case lists:keysearch({IP, Port}, 1, Connection#connection.port_bindings) of
-	{value, {{IP, Port}, ChannelPid}} -> ChannelPid;
+    case lists:keyfind({IP, Port}, 1, Connection#connection.port_bindings) of
+	{{IP, Port}, ChannelPid} -> ChannelPid;
 	_ -> undefined
     end.
 
@@ -929,9 +923,8 @@ messages() ->
      ].
 
 encode_ip(Addr) when is_tuple(Addr) ->
-    case catch inet_parse:ntoa(Addr) of
-	{'EXIT',_} -> false;
-	A -> A
+    try inet_parse:ntoa(Addr)
+    catch _:_ -> false
     end;
 encode_ip(Addr) when is_list(Addr) ->
     case inet_parse:address(Addr) of
@@ -1058,10 +1051,10 @@ reply_msg(#channel{user = ChannelPid}, Connection, Reply) ->
     {{channel_data, ChannelPid, Reply}, Connection}.
 
 request_reply_or_data(#channel{local_id = ChannelId, user = ChannelPid}, 
-		      #connection{requests = Requests} = 
-		      Connection, Reply) -> 
-    case lists:keysearch(ChannelId, 1, Requests) of
-	{value, {ChannelId, From}} ->
+		      #connection{requests = Requests} = Connection,
+		      Reply) ->
+    case lists:keyfind(ChannelId, 1, Requests) of
+	{ChannelId, From} ->
 	    {{channel_requst_reply, From, Reply}, 
 	     Connection#connection{requests = 
 				   lists:keydelete(ChannelId, 1, Requests)}};
@@ -1071,7 +1064,7 @@ request_reply_or_data(#channel{local_id = ChannelId, user = ChannelPid},
 
 update_send_window(Channel0, DataType, Data,  
 			#connection{channel_cache = Cache}) ->
-    Buf0 = if Data == <<>> ->
+    Buf0 = if Data =:= <<>> ->
 		   Channel0#channel.send_buf;
 	      true ->
 		   Channel0#channel.send_buf ++ [{DataType, Data}]
@@ -1090,7 +1083,7 @@ get_window(Bs, PSz, WSz) ->
 get_window(Bs, _PSz, 0, Acc) ->
     {lists:reverse(Acc), 0, Bs};
 get_window([B0 = {DataType, Bin} | Bs], PSz, WSz, Acc) ->
-    BSz = size(Bin),
+    BSz = byte_size(Bin),
     if BSz =< WSz ->  %% will fit into window
 	    if BSz =< PSz ->  %% will fit into a packet
 		    get_window(Bs, PSz, WSz-BSz, [B0|Acc]);
@@ -1130,7 +1123,7 @@ flow_control([_|_], #channel{flow_control = From} = Channel, Cache) ->
 
 encode_pty_opts(Opts) ->
     Bin = list_to_binary(encode_pty_opts2(Opts)),
-    Len = size(Bin),
+    Len = byte_size(Bin),
     <<?UINT32(Len), Bin/binary>>.
 
 encode_pty_opts2([]) -> 

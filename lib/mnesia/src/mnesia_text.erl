@@ -26,7 +26,7 @@ load_textfile(File) ->
     ensure_started(),
     case parse(File) of
 	{ok, {Tabs, Data}} ->
-	    Badtabs = make_tabs(lists:map(fun validate_tab/1, Tabs)),
+	    Badtabs = make_tabs([validate_tab(T) || T <- Tabs]),
 	    load_data(del_data(Badtabs, Data, []));
 	Other ->
 	    Other
@@ -36,21 +36,20 @@ dump_to_textfile(File) ->
     dump_to_textfile(mnesia_lib:is_running(), file:open(File, [write])).
 dump_to_textfile(yes, {ok, F}) ->
     Tabs = lists:delete(schema, mnesia_lib:local_active_tables()),
-    Defs = lists:map(fun(T) -> {T, [{record_name, mnesia_lib:val({T, record_name})},
-				    {attributes, mnesia_lib:val({T, attributes})}]} 
-		     end,
-		     Tabs),
+    Defs = [{T, [{record_name, mnesia_lib:val({T, record_name})},
+		 {attributes, mnesia_lib:val({T, attributes})}]} || T <- Tabs],
     io:format(F, "~p.~n", [{tables, Defs}]),
     lists:foreach(fun(T) -> dump_tab(F, T) end, Tabs),
     file:close(F);
 dump_to_textfile(_,_) -> error.
 
-    
 dump_tab(F, T) ->
     W = mnesia_lib:val({T, wild_pattern}),
-    {atomic,All} = mnesia:transaction(fun() -> mnesia:match_object(T, W, read) end),
-    lists:foreach(fun(Term) -> io:format(F,"~p.~n", [setelement(1, Term, T)]) end, All).
-
+    {atomic, All} =
+	mnesia:transaction(fun() -> mnesia:match_object(T, W, read) end),
+    lists:foreach(fun(Term) ->
+			  io:format(F,"~p.~n", [setelement(1, Term, T)])
+		  end, All).
 
 ensure_started() ->
     case mnesia_lib:is_running() of

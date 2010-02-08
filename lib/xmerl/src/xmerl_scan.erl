@@ -734,7 +734,6 @@ scan_prolog2(Str, S0 = #xmerl_scanner{user_state=_US},Pos) ->
 
 
 
-
 %%% [27] Misc ::=   	Comment | PI | S
 %% Note:
 %% - Neither of Comment and PI are returned in the resulting parsed
@@ -984,7 +983,7 @@ scan_enc_name2([H|T], S0, Delim, Acc) when H >= $A, H =< $Z ->
 scan_enc_name2([H|T], S0, Delim, Acc) when H >= $0, H =< $9 ->
     ?bump_col(1),
     scan_enc_name2(T, S, Delim, [H|Acc]);
-scan_enc_name2([H|T], S0, Delim, Acc) when H == $.; H == $_; H == $- ->
+scan_enc_name2([H|T], S0, Delim, Acc) when H =:= $.; H =:= $_; H =:= $- ->
     ?bump_col(1),
     scan_enc_name2(T, S, Delim, [H|Acc]).
 
@@ -996,7 +995,7 @@ scan_xml_vsn([], S=#xmerl_scanner{continuation_fun = F}) ->
     F(fun(MoreBytes, S1) -> scan_xml_vsn(MoreBytes, S1) end,
       fun(S1) -> ?fatal(unexpected_end, S1) end,
       S);
-scan_xml_vsn([H|T], S) when H==$"; H==$'->
+scan_xml_vsn([H|T], S) when H =:= $"; H =:= $'->
     xml_vsn(T, S#xmerl_scanner{col = S#xmerl_scanner.col+1}, H, []).
 
 xml_vsn([], S=#xmerl_scanner{continuation_fun = F}, Delim, Acc) ->
@@ -1028,7 +1027,7 @@ scan_pi([], S=#xmerl_scanner{continuation_fun = F}, Pos) ->
       fun(S1) -> ?fatal(unexpected_end, S1) end,
       S);
 scan_pi(Str = [H1,H2,H3 | T],S0=#xmerl_scanner{line = L, col = C}, Pos)
-  when H1==$x;H1==$X ->
+  when H1 =:= $x ; H1 =:= $X ->
     %% names beginning with [xX][mM][lL] are reserved for future use.
     ?bump_col(3),
     if 
@@ -1204,17 +1203,17 @@ scan_doctype3(T, S, DTD) ->
 
 
 
-fetch_DTD(undefined, S=#xmerl_scanner{doctype_DTD=URI}) when is_list(URI)->
+fetch_DTD(undefined, S=#xmerl_scanner{doctype_DTD=URI}) when is_list(URI) ->
     %% allow to specify DTD name when it isn't available in xml stream
     fetch_DTD({system,URI},S#xmerl_scanner{doctype_DTD=option_provided});
 fetch_DTD(undefined, S) ->
     S;
 % fetch_DTD(_,S=#xmerl_scanner{validation=false}) ->
 %     S;
-fetch_DTD(DTDSpec, S)-> 
+fetch_DTD(DTDSpec, S) ->
     case fetch_and_parse(DTDSpec,S,[{text_decl,true},
 				    {environment,{external,subset}}]) of
-	NewS when is_record(NewS,xmerl_scanner) ->
+	#xmerl_scanner{} = NewS ->
 	    NewS;
 	{_Res,_Tail,_Sx} -> % Continue with old scanner data, result in Rules
 	    S
@@ -1372,7 +1371,7 @@ check_attributes([{_,{enumeration,_},_,_,_}=Attr|T],S) ->
     vc_Enumeration(Attr,S),
     check_attributes(T,S);
 check_attributes([{_,Ent,_,_,_}=Attr|T],S) 
-  when Ent=='ENTITY';Ent=='ENTITIES' ->
+  when Ent =:= 'ENTITY'; Ent =:= 'ENTITIES' ->
     vc_Entity_Name(Attr,S),
     check_attributes(T,S);
 check_attributes([_|T],S) ->
@@ -1456,7 +1455,7 @@ scan_decl_sep(T,S) ->
 %     {PERefName, T1, S1} = scan_pe_reference(T, S),
 %     {ExpandedRef,S2} =
 % 	case expand_pe_reference(PERefName,S1,as_PE) of
-% 	    Tuple when tuple(Tuple) ->
+% 	    Tuple when is_tuple(Tuple) ->
 % 		%% {system,URI} or {public,URI}
 % 		{ExpRef,Sx}=fetch_not_parse(Tuple,S1),
 % 		{EntV,_,_S2} = scan_entity_value(ExpRef, Sx, no_delim,
@@ -2207,7 +2206,6 @@ expanded_name(_Name, {Prefix, Local}, #xmlNamespace{nodes = Ns}, S) ->
 		    
 
 
-
 keyreplaceadd(K, Pos, [H|T], Obj) when K == element(Pos, H) ->
     [Obj|T];
 keyreplaceadd(K, Pos, [H|T], Obj) ->
@@ -2249,13 +2247,13 @@ scan_att_value("%"++T,S0=#xmerl_scanner{rules_read_fun=Read,
 	end,
     {_,T2,S3} = strip(ExpandedRef ++ T1,S2),
     scan_att_value(T2,S3,AttType);
-scan_att_value([H|T], S0,'CDATA'=AT) when H == $"; H == $' ->
+scan_att_value([H|T], S0,'CDATA'=AT) when H =:= $"; H =:= $' ->
     ?bump_col(1),
     scan_att_chars(T, S, H, [],[], AT,false);
-scan_att_value([H|T], S0,AttType) when H == $"; H == $' ->
+scan_att_value([H|T], S0,AttType) when H =:= $"; H =:= $' ->
     ?bump_col(1),
     {T1,S1,IsNorm} = normalize(T,S,false),
-    scan_att_chars(T1, S1, H, [],[], AttType,IsNorm).
+    scan_att_chars(T1, S1, H, [], [], AttType,IsNorm).
 
 scan_att_chars([],S=#xmerl_scanner{continuation_fun=F},H,Acc,TmpAcc,AT,IsNorm)->
     ?dbg("cont()...~n", []),
@@ -2318,7 +2316,7 @@ check_att_default_val(_,_,_,_) ->
     ok.
 
 check_att_default_val(Name,Ent,S=#xmerl_scanner{rules_write_fun=Write}) 
-  when Ent == 'ENTITY'; Ent == 'ENTITIES' ->
+  when Ent =:= 'ENTITY'; Ent =:= 'ENTITIES' ->
     case xmerl_lib:is_letter(hd(Name)) of
 	true -> ok;
 	_ -> ?fatal({illegal_first_character,Ent,Name},S)
@@ -2326,7 +2324,7 @@ check_att_default_val(Name,Ent,S=#xmerl_scanner{rules_write_fun=Write})
     SName = list_to_atom(Name),
     Write(entity,SName,undeclared,S);
 check_att_default_val(Name,IDR,S=#xmerl_scanner{rules_write_fun=Write})
-  when IDR == 'IDREF'; IDR == 'IDREFS' ->
+  when IDR =:= 'IDREF'; IDR =:= 'IDREFS' ->
     case xmerl_lib:is_letter(hd(Name)) of
 	true -> ok;
 	_ -> ?fatal({illegal_first_character,IDR,Name},S)
@@ -2356,7 +2354,7 @@ check_att_default_val(Name,'ID',S=#xmerl_scanner{rules_write_fun=Write,
 check_att_default_val(_,_,_) ->
     ok.
 
-valid_Char(dtd,AT,C,S) when AT=='NMTOKEN';AT=='NMTOKENS' ->
+valid_Char(dtd,AT,C,S) when AT =:= 'NMTOKEN'; AT =:= 'NMTOKENS' ->
     vc_Valid_Char(AT,C,S);
 valid_Char(_,_,[C],S) ->
     case xmerl_lib:is_char(C) of
@@ -2683,7 +2681,7 @@ expand_pe_reference(Name, #xmerl_scanner{rules_read_fun = Read} = S,WS) ->
 	    Tuple;
 	Result ->
 	    if
-		WS == in_literal -> Result;
+		WS =:= in_literal -> Result;
 		true -> " "++Result++" "
 	    end
     end.
@@ -2972,7 +2970,7 @@ scan_pubid_literal([], S=#xmerl_scanner{continuation_fun = F}) ->
     F(fun(MoreBytes, S1) -> scan_pubid_literal(MoreBytes, S1) end,
       fun(S1) -> ?fatal(unexpected_end, S1) end,
       S);
-scan_pubid_literal([H|T], S) when H == $"; H == $' ->
+scan_pubid_literal([H|T], S) when H =:= $"; H =:= $' ->
     scan_pubid_literal(T, S#xmerl_scanner{col = S#xmerl_scanner.col+1}, H, []);
 scan_pubid_literal([H|_T], S) ->
     ?fatal({invalid_pubid_char, H}, S).
@@ -3058,7 +3056,7 @@ scan_elem_content(")" ++ T, S0, Context, Mode0, Acc0) ->
     {Mode, Acc} = case {Mode0, Acc0} of
 		      {unknown, [_X]} ->
 			  {seq, Acc0};
-		      {M, _L} when M == seq; M == choice ->
+		      {M, _L} when M =:= seq; M =:= choice ->
 			  {Mode0, lists:reverse(Acc0)}
 		  end,
     {Occurrence, T1, S1} = scan_occurrence(T, S),
@@ -3078,7 +3076,7 @@ scan_elem_content(")" ++ T, S0, Context, Mode0, Acc0) ->
 scan_elem_content("#PCDATA" ++ _T, S, not_mixed, _Mode, _Acc) ->
     ?fatal({error,{extra_set_of_parenthesis}},S);
 scan_elem_content("#PCDATA" ++ _T, S, _Cont, Mode, Acc) 
-  when Mode==choice;Mode==seq;Acc/=[] ->
+  when Mode =:= choice ; Mode =:= seq ; Acc =/= [] ->
     ?fatal({error,{invalid_format_of_mixed_content}},S);
 scan_elem_content("#PCDATA" ++ T, S0, _Context, Mode, Acc) ->
     ?bump_col(7),
@@ -3167,16 +3165,16 @@ vc_Valid_Char(_AT,C,S) ->
 
 
 vc_ID_Attribute_Default(_,#xmerl_scanner{validation=Valid}) 
-  when Valid /= dtd ->
+  when Valid =/= dtd ->
     ok;  
 vc_ID_Attribute_Default({_,'ID',_,Def,_},_S) 
-  when Def=='#IMPLIED';Def=='#REQUIRED' ->
+  when Def =:= '#IMPLIED' ; Def =:= '#REQUIRED' ->
     ok;
 vc_ID_Attribute_Default({_,'ID',_,Def,_},S) ->
     ?fatal({error,{validity_constraint_error_ID_Attribute_Default,Def}},S).
 
 vc_Enumeration({_Name,{_,NameList},DefaultVal,_,_},S) 
-  when is_list(DefaultVal) ->    
+  when is_list(DefaultVal) ->
     case lists:member(list_to_atom(DefaultVal),NameList) of
 	true ->
 	    ok;

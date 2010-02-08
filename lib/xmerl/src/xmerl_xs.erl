@@ -48,6 +48,7 @@
 -module(xmerl_xs).
 
 -export([xslapply/2, value_of/1, select/2, built_in_rules/2 ]).
+
 -include("xmerl.hrl").
 
 
@@ -72,9 +73,9 @@
 %% </pre>
 
 xslapply(Fun, EList) when is_list(EList) ->
-    lists:map( Fun, EList);
-xslapply(Fun, E = #xmlElement{})->
-    lists:map( Fun, E#xmlElement.content).
+    lists:map(Fun, EList);
+xslapply(Fun, #xmlElement{content = Content}) ->
+    lists:map(Fun, Content).
 
 
 %% @spec value_of(E) -> List
@@ -95,29 +96,29 @@ xslapply(Fun, E = #xmlElement{})->
 %%    ["&lt;div align="center">&lt;h1>", 
 %%      value_of(select(".", E)), "&lt;/h1>&lt;/div>"]
 %% </pre>
-value_of(E)->
+value_of(E) ->
     lists:reverse(xmerl_lib:foldxml(fun value_of1/2, [], E)).
 
-value_of1(#xmlText{}=T1, Accu)->
-    [xmerl_lib:export_text(T1#xmlText.value)|Accu];
+value_of1(#xmlText{value = Value}, Accu) ->
+    [xmerl_lib:export_text(Value)|Accu];
 value_of1(_, Accu) ->
     Accu.
 
-%% @spec select(String::string(),E)-> E
+%% @spec select(String::string(), E) -> E
 %%
 %% @doc Extracts the nodes from the xml tree according to XPath.
 %% @see value_of/1
-select(Str,E)->
-    xmerl_xpath:string(Str,E).
+select(Str, E) ->
+    xmerl_xpath:string(Str, E).
 
 %% @spec built_in_rules(Fun, E) -> List
 %%
 %% @doc The default fallback behaviour. Template funs should end with:
 %% <br/><code>template(E) -> built_in_rules(fun template/1, E)</code>.
-built_in_rules(Fun, E = #xmlElement{})->
-    lists:map(Fun, E#xmlElement.content);
-built_in_rules(_Fun, E = #xmlText{}) ->
-    xmerl_lib:export_text(E#xmlText.value);
-built_in_rules(_Fun, E = #xmlAttribute{}) ->
-    E#xmlAttribute.value;
-built_in_rules(_Fun, _E) ->[].
+built_in_rules(Fun, #xmlElement{content = Content}) ->
+    lists:map(Fun, Content);
+built_in_rules(_Fun, #xmlText{value = Value}) ->
+    xmerl_lib:export_text(Value);
+built_in_rules(_Fun, #xmlAttribute{value = Value}) ->
+    Value;
+built_in_rules(_Fun, _E) -> [].

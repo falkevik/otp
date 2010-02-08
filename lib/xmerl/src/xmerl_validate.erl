@@ -22,29 +22,29 @@
 -export([validate/2]).
 
 
--include("xmerl.hrl").		% record def, macros
+-include("xmerl.hrl").		% record defs, types, macros
 
 
 
-%% +type validate(xmerl_scanner(),xmlElement())->
-%%              xmlElment() | {error,tuple()}.
+%% -spec validate(xmerl_scanner(), xmlElement()) ->
+%%              xmlElement() | {error,tuple()}.
 validate(#xmerl_scanner{doctype_name=DTName,doctype_DTD=OpProv},
 	 #xmlElement{name=Name})
-  when DTName=/=Name,OpProv=/=option_provided->
+  when DTName =/= Name, OpProv =/= option_provided ->
     {error, {mismatched_root_element,Name,DTName}};
 validate(#xmerl_scanner{rules=Rules}=S,
-	 XML=#xmlElement{name=Name})->
+	 XML=#xmlElement{name=Name}) ->
     catch do_validation(read_rules(Rules,Name),XML,Rules,S);
 validate(_, XML) ->
     {error, {no_xml_element, XML}}.
 
 
 
-%% +type validate(rules(),xmlElement())->
-%%              {ok,xmlElement()} | {error,tuple()}.
-do_validation(undefined,#xmlElement{name=Name}, _Rules,_S) ->
+%% -spec do_validation(rules(),xmlElement(),...,xmerl_scanner()) ->
+%%              xmlElement() | {error,tuple()}.
+do_validation(undefined, #xmlElement{name=Name}, _Rules,_S) ->
     {error,{unknown_element,Name}};
-do_validation(El_Rule,XML,Rules,S)->
+do_validation(El_Rule, XML, Rules, S) ->
     case catch valid_attributes(El_Rule#xmlElement.attributes,
 			  XML#xmlElement.attributes,S) of
 	{'EXIT',Reason} ->
@@ -60,9 +60,9 @@ do_validation(El_Rule,XML,Rules,S)->
 	    check_direct_ws_SDD(XML_Cont,WSActionMode),
 	    case valid_contents(El_Rule_Cont,
 				XML_Cont,Rules,S,WSActionMode) of
-		{error,Reason}->
+		{error,Reason} ->
 		    {error,Reason};
-		{error,Reason,N}->
+		{error,Reason,N} ->
 		    {error,Reason,N};
 		XMLS ->
 		    XML#xmlElement{attributes=Attr_2,content=XMLS}
@@ -92,7 +92,7 @@ ws_action_mode({external,_},Content,#xmerl_scanner{standalone=yes}) ->
 ws_action_mode(_,_,_) ->
     preserve.
 
-element_content(A) when is_atom(A),A /= any, A /= empty ->
+element_content(A) when is_atom(A), A =/= any, A =/= empty ->
     children;
 element_content({choice,L}) when is_list(L) ->
     element_content(L);
@@ -106,7 +106,7 @@ element_content({'*',Rest}) ->
     element_content(Rest);
 element_content(_) -> children.
 
-%% +type read_rules(DTD::atom(),Element_Name::atom())->
+%% -spec read_rules(DTD::atom(),Element_Name::atom()) ->
 %%              undefined | xmlElement().
 read_rules(_, pcdata) ->
     pcdata;
@@ -121,15 +121,15 @@ read_rules(T, Name) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%% Attributes Validation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% +deftype attribute_rule() = {Attr_Name::atom(),attribute_type(),
+%% -type attribute_rule() :: {Attr_Name::atom(),attribute_type(),
 %%                              attribute_priority()}.
 
-%% +type valid_attributes([attribute_rule()],[xmlAttribute()])->
+%% -spec valid_attributes([attribute_rule()],[xmlAttribute()]) ->
 %%              [xmlAttribute()] | {error,attribute_unknow}.
-valid_attributes(All_Attr,[#xmlAttribute{}|_T]=Attr,S)->
+valid_attributes(All_Attr,[#xmlAttribute{}|_T]=Attr,S) ->
     single_ID_definition(All_Attr),
     vc_Name_Token_IDREFS(All_Attr,Attr),
-    lists:foreach(fun(#xmlAttribute{name=Name})->
+    lists:foreach(fun(#xmlAttribute{name=Name}) ->
 			  case is_attribute_exist(Name,All_Attr) of
 			      true ->
 				  ok;
@@ -138,7 +138,7 @@ valid_attributes(All_Attr,[#xmlAttribute{}|_T]=Attr,S)->
 			  end
 		  end,
 		  Attr),
-    lists:flatten(lists:foldl(fun({Name,DataType,IF,DefDecl,Env},Attr_2)->
+    lists:flatten(lists:foldl(fun({Name,DataType,IF,DefDecl,Env},Attr_2) ->
 				      Attr_2++
 					  [valid_attribute(Name,DataType,IF,
 							   DefDecl,Attr,Env,S)] 
@@ -147,7 +147,7 @@ valid_attributes([],[],_) ->
     [];
 valid_attributes(All_Attr,[],S) ->
     single_ID_definition(All_Attr),
-    lists:flatten(lists:foldl(fun({Name,DataType,IF,DefDecl,Env},Attr_2)->
+    lists:flatten(lists:foldl(fun({Name,DataType,IF,DefDecl,Env},Attr_2) ->
 				      Attr_2++[valid_attribute(Name,
 							       DataType,IF,
 							       DefDecl,
@@ -155,15 +155,15 @@ valid_attributes(All_Attr,[],S) ->
 							       Env,S)] 
 			      end,[],All_Attr)).
 
-%%%%  [60]      DefaultDecl::=   
+%%%%  [60]      DefaultDecl ::=
 %%%%                              '#REQUIRED' | '#IMPLIED' 
 %%%%                            | (('#FIXED' S)? AttValue)
-%% +deftype attribute_priority = '#REQUIRED'|'#FIXED'|'#IMPLIED'.
+%% -type attribute_priority :: '#REQUIRED'|'#FIXED'|'#IMPLIED'.
 
-%% +type valid_attribute(Name::atom(),DataType::attribute_value(),
-%%                       IF::attribute_priority(),[xmlAttribute()])->
+%% -spec valid_attribute(Name::atom(),DataType::attribute_value(),
+%%                       IF::attribute_priority(),[xmlAttribute()]) ->
 %%         [xmlAttribute()] | exit().
-valid_attribute(Name,DataType,IF,DefaultDecl,List_of_Attributes,Env,S)->
+valid_attribute(Name,DataType,IF,DefaultDecl,List_of_Attributes,Env,S) ->
     SA = S#xmerl_scanner.standalone,
     Attr=search_attr(Name,List_of_Attributes),
     check_SDD_validity(SA,Env,Attr,IF),
@@ -178,9 +178,9 @@ valid_attribute(Name,DataType,IF,DefaultDecl,List_of_Attributes,Env,S)->
 	    #xmlAttribute{name=Name,value=A}; % FIXED declare value becomes default.
 	{'#FIXED',A,B} ->
 	    exit({error,{fixed_default_value_missmatch,A,B}});
-	{_,Value,no_attribute} when is_list(Value)->
+	{_,Value,no_attribute} when is_list(Value) ->
 	    #xmlAttribute{name=Name,value=Value};
-	{_,_,#xmlAttribute{}=Attr}->
+	{_,_,#xmlAttribute{}=Attr} ->
 	    %% do test data value, and default_value
 	    test_attribute_value(DataType,Attr,IF,S);
 	{DefDecl,Else,XML} ->
@@ -188,7 +188,7 @@ valid_attribute(Name,DataType,IF,DefaultDecl,List_of_Attributes,Env,S)->
     end.
 
 vc_Name_Token_IDREFS([{Name,Type,_,_,_}|Rest],Attrs) 
-  when Type=='NMTOKEN';Type=='NMTOKENS'->
+  when Type =:= 'NMTOKEN'; Type =:= 'NMTOKENS' ->
     case lists:keysearch(Name,#xmlAttribute.name,Attrs) of
 	{value,A} ->
 	    valid_nmtoken_value(A#xmlAttribute.value,Type);
@@ -196,7 +196,7 @@ vc_Name_Token_IDREFS([{Name,Type,_,_,_}|Rest],Attrs)
     end,
     vc_Name_Token_IDREFS(Rest,Attrs);
 vc_Name_Token_IDREFS([{Name,Type,_,_,_}|Rest],Attrs) 
-  when Type=='IDREFS'->
+  when Type =:= 'IDREFS'->
     case lists:keysearch(Name,#xmlAttribute.name,Attrs) of
 	{value,A} ->
 	    valid_IDREFS(A#xmlAttribute.value,Type);
@@ -227,7 +227,7 @@ valid_nmtoken_value([],'NMTOKENS') ->
 %     ValidCharList(L,ValidChar);
 valid_nmtoken_value(Nmtok,_) ->
     ValidChar =
-	fun(X) when ?whitespace(X),Nmtok=='NMTOKENS' ->
+	fun(X) when ?whitespace(X), Nmtok =:= 'NMTOKENS' ->
 		ok;
 	   (X) ->
 		case xmerl_lib:is_namechar(X) of
@@ -256,19 +256,19 @@ single_ID_definition([]) ->
     
 check_SDD_validity(yes,{external,_},#xmlAttribute{name=Name,normalized=true},_) ->
     exit({error,{externally_defed_attribute_normalized_in_standalone_doc,Name}});
-check_SDD_validity(yes,{external,_},no_attribute,V) when V /= no_value->
+check_SDD_validity(yes,{external,_},no_attribute,V) when V =/= no_value ->
     exit({error,{externally_defed_attribute_with_default_value_missing_in_standalone_doc}});
 check_SDD_validity(_,_,_,_) ->
     ok.
     
-search_attr(Name,[#xmlAttribute{name=Name}=H|_T])->
+search_attr(Name,[#xmlAttribute{name=Name}=H|_T]) ->
     H;
-search_attr(Name,[#xmlAttribute{}|T])-> 
+search_attr(Name,[#xmlAttribute{}|T]) ->
     search_attr(Name,T);
 search_attr(_Name,_T) ->
     no_attribute.
 
-is_attribute_exist(Name,[{Name,_,_,_,_}|_T])->
+is_attribute_exist(Name,[{Name,_,_,_,_}|_T]) ->
     true;
 is_attribute_exist(Name,[{_Attr,_,_,_,_}|T]) ->
     is_attribute_exist(Name,T);
@@ -283,23 +283,23 @@ is_attribute_exist(_Name,[]) ->
 %%%%[58] NotationType::= 'NOTATION' S '(' S? Name (S? '|' S? Name)* S? ')' 
 %%%%[59] Enumeration ::= '(' S? Nmtoken (S? '|' S? Nmtoken)* S? ')'
 
-%% +deftype attribute_type()-> 'CDATA' | 'ID'|'IDREF'| 'IDREFS'|'ENTITY'| 
-%%                             'ENTITIES'| 'NMTOKEN'| 'NMTOKENS'
-%%                             {enumeration,[List_of_value::atom()]}.
+%% -type attribute_type() :: 'CDATA' | 'ID'| 'IDREF'| 'IDREFS' | 'ENTITY' |
+%%                           'ENTITIES'| 'NMTOKEN'| 'NMTOKENS'
+%%                           {enumeration,[List_of_value::atom()]}.
 
-%% +type test_attribute_value(attribute_type(),xmlAttribute())->
-%%             xmlAttribute()| exit.
+%% -spec test_attribute_value(attribute_type(),xmlAttribute()) ->
+%%             xmlAttribute() | exit.
 %%%% test the constraint validity of Attribute value.
 test_attribute_value('CDATA',#xmlAttribute{}=Attr,_,_) ->
     Attr;
 test_attribute_value('NMTOKEN',#xmlAttribute{name=Name,value=V}=Attr,
 		     Default,_S) ->
     Fun =
-	fun (X)->
+	fun (X) ->
 		case xmerl_lib:is_namechar(X) of
-		    true->
+		    true ->
 			ok;
-		    false->
+		    false ->
 			%%io:format("Warning*** nmtoken,value_incorrect:  ~p~n",[V]),
 			exit({error,{invalid_value_nmtoken,Name,V}})
 		end
@@ -314,11 +314,11 @@ test_attribute_value('NMTOKEN',#xmlAttribute{name=Name,value=V}=Attr,
 test_attribute_value('NMTOKENS',#xmlAttribute{name=Name,value=V}=Attr,
 		     Default,_S) ->
     Fun = 
-	fun (X)->
+	fun (X) ->
 		case xmerl_lib:is_namechar(X) of
 		    true->
 			ok;
-		    false when ?whitespace(X)->
+		    false when ?whitespace(X) ->
 			ok;
 		    false ->
 			exit({error,{invalid_value_nmtokens,Name,V}})
@@ -333,7 +333,7 @@ test_attribute_value('NMTOKENS',#xmlAttribute{name=Name,value=V}=Attr,
     Attr;
 test_attribute_value(Ent,#xmlAttribute{name=_Name,value=V}=Attr,_Default,
 		     S=#xmerl_scanner{rules_read_fun=Read}) 
-  when Ent == 'ENTITY'; Ent == 'ENTITIES'->
+  when Ent =:= 'ENTITY'; Ent =:= 'ENTITIES'->
     %% The default value is already checked
     NameListFun = 
 	fun([],Acc,_) ->
@@ -354,7 +354,7 @@ test_attribute_value(Ent,#xmlAttribute{name=_Name,value=V}=Attr,_Default,
     lists:foreach(VC_Entity_Name,NameList),
     Attr;
 test_attribute_value({Type,L},#xmlAttribute{value=Value}=Attr,Default,_S)
-  when Type == enumeration; Type == notation ->
+  when Type =:= enumeration; Type =:= notation ->
     ValidDefault = 
 	if 
 	    is_atom(Default) -> true;
@@ -397,9 +397,9 @@ test_attribute_value(_Rule,Attr,_,_) ->
 %%%%              | '(' S? '#PCDATA' S? ')' 
 
 
-%% +type valid_contents([rule()],[xmlElement()])->
-%%              [xmlElement() | {error,???}.
-valid_contents(Rule,XMLS,Rules,S,WSActionMode)->
+%% -spec valid_contents([rule()],[xmlElement()]) ->
+%%              [xmlElement()] | {error,???}.
+valid_contents(Rule,XMLS,Rules,S,WSActionMode) ->
     case parse(Rule,XMLS,Rules,WSActionMode,S) of
 	{XML_N,[]}->
 	    lists:flatten(XML_N);
@@ -413,11 +413,11 @@ valid_contents(Rule,XMLS,Rules,S,WSActionMode)->
 	    {error,Reason,N}
     end.
 
-parse({'*',SubRule},XMLS,Rules,WSaction,S)->
+parse({'*',SubRule},XMLS,Rules,WSaction,S) ->
     star(SubRule,XMLS,Rules,WSaction,[],S); 
 parse({'+',SubRule},XMLS,Rules,WSaction,S) ->
     plus(SubRule,XMLS,Rules,WSaction,S);
-parse({choice,CHOICE},XMLS,Rules,WSaction,S)->
+parse({choice,CHOICE},XMLS,Rules,WSaction,S) ->
 %    case XMLS of
 %	[] ->
 %	    io:format("~p~n",[{choice,CHOICE,[]}]);
@@ -429,20 +429,20 @@ parse({choice,CHOICE},XMLS,Rules,WSaction,S)->
     choice(CHOICE,XMLS,Rules,WSaction,S);
 parse(empty,[],_Rules,_WSaction,_S) ->
     {[],[]};
-parse({'?',SubRule},XMLS,Rules,_WSaction,S)->
+parse({'?',SubRule},XMLS,Rules,_WSaction,S) ->
     question(SubRule,XMLS,Rules,S);
 parse({seq,List},XMLS,Rules,WSaction,S) ->
     seq(List,XMLS,Rules,WSaction,S);
 parse(El_Name,[#xmlElement{name=El_Name}=XML|T],Rules,_WSaction,S) 
-  when is_atom(El_Name)->
+  when is_atom(El_Name) ->
     case do_validation(read_rules(Rules,El_Name),XML,Rules,S) of
 	{error,R} ->
 %	    {error,R};
 	    exit(R);
-	{error,R,_N}->
+	{error,R,_N} ->
 %	    {error,R,N};
 	    exit(R);
-	XML_->
+	XML_ ->
 	    {[XML_],T}
     end;
 parse(any,Cont,Rules,_WSaction,S) ->
@@ -450,16 +450,16 @@ parse(any,Cont,Rules,_WSaction,S) ->
 	Err = {error,_} -> Err;
 	ValidContents -> {ValidContents,[]}
     end;
-parse(El_Name,[#xmlElement{name=Name}|_T]=S,_Rules,_WSa,_S) when is_atom(El_Name)->
+parse(El_Name,[#xmlElement{name=Name}|_T]=S,_Rules,_WSa,_S) when is_atom(El_Name) ->
     {error,
      {element_seq_not_conform,{wait,El_Name},{is,Name}},
      {{next,S},{act,[]}} };
 parse(_El_Name,[#xmlPI{}=H|T],_Rules,_WSa,_S) ->
     {[H],T};
-parse('#PCDATA',XML,_Rules,_WSa,_S)->
+parse('#PCDATA',XML,_Rules,_WSa,_S) ->
     %%% PCDATA it is 0 , 1 or more #xmlText{}.
     parse_pcdata(XML);
-parse(El_Name,[#xmlText{}|_T]=S,_Rules,_WSa,_S)->
+parse(El_Name,[#xmlText{}|_T]=S,_Rules,_WSa,_S) ->
     {error,
      {text_in_place_of,El_Name},
      {{next,S},{act,[]}}};
@@ -493,7 +493,7 @@ parse_any(El,_Rules,_S) ->
 %% XXX remove first function clause
 % choice(_Choice,[#xmlText{}=T|R],_Rules) ->
 %     {[T],R};
-choice([CH|CHS],[_XML|_T]=XMLS,Rules,WSaction,S)->
+choice([CH|CHS],[_XML|_T]=XMLS,Rules,WSaction,S) ->
     {WS,XMLS1} = whitespace_action(XMLS,ws_action(WSaction,remove)),
     case parse(CH,XMLS1,Rules,ws_action(WSaction,remove),S) of
 	{error,_R} ->
@@ -513,7 +513,7 @@ choice([CH|CHS],[_XML|_T]=XMLS,Rules,WSaction,S)->
 	    {WS2,XMLS3} = whitespace_action(XMLS2,ws_action(WSaction,remove)),
 	    {WS2++[Tree]++WS,XMLS3}
     end;
-choice([],XMLS,_,WSaction,_S)->
+choice([],XMLS,_,WSaction,_S) ->
     case whitespace_action(XMLS,ws_action(WSaction,remove)) of
 	Res={_,[]} -> Res;
 	_ ->
@@ -539,7 +539,7 @@ plus(Rule,XMLS,Rules,WSaction,S) ->
 	    end
     end.
 
-star(_Rule,XML,_Rules,_WSa,Tree,_S) when length(XML)==0->
+star(_Rule,[],_Rules,_WSa,Tree,_S) ->
     {[Tree],[]};
 star(Rule,XMLS,Rules,WSaction,Tree,S) ->
     {WS,XMLS1} = whitespace_action(XMLS,WSaction),
@@ -573,7 +573,7 @@ question(Rule, Toks,Rules,S) ->
 	    {T, Toks1}
     end.
 
-seq(H,Toks,Rules,WSaction,S)->
+seq(H,Toks,Rules,WSaction,S) ->
     case seq2(H,Toks,Rules,[],WSaction,S) of
 	{error,E}->
 	    {error,E};
@@ -583,12 +583,12 @@ seq(H,Toks,Rules,WSaction,S)->
 	    {Tree,Toks2}
     end.
 
-seq2([],[],_,Tree,_WSa,_S)->
+seq2([],[],_,Tree,_WSa,_S) ->
     {Tree,[]};
-% seq2([],[#xmlElement{name=Name}|_T]=XMLS,_,Tree,_WSa,_S)->
+% seq2([],[#xmlElement{name=Name}|_T]=XMLS,_,Tree,_WSa,_S) ->
 %     {error,{sequence_finish,Name,isnt_in_the_right_place},
 %      {{next,XMLS},{act,Tree}}};
-seq2([],[#xmlText{}]=XML,_,Tree,_WSa,_S)->
+seq2([],[#xmlText{}]=XML,_,Tree,_WSa,_S) ->
     case whitespace_action(XML,remove) of
 	{[],_} ->
 	    {error,sequence_finish,{{next,XML},{act,Tree}}};
@@ -601,27 +601,27 @@ seq2([],Rest,_,Tree,_WSa,_S) ->
 seq2([H|T],Toks,Rules,Tree,WSaction,S) ->
     {WS,Toks1} = whitespace_action(Toks,ws_action(WSaction,remove)),
     case parse(H,Toks1,Rules,remove,S) of %% H maybe only match parts of Toks 
-	{error,Reason,_XML}->
+	{error,Reason,_XML} ->
 	    {error,Reason};
-	{error,E}->
+	{error,E} ->
 	    {error,E};
-	{[],Toks2}->
+	{[],Toks2} ->
 	    seq2(T,Toks2,Rules,Tree,WSaction,S);
-	{Tree1,Toks2} when is_list(Tree1)->
+	{Tree1,Toks2} when is_list(Tree1) ->
 	    seq2(T,Toks2,Rules,Tree++WS++Tree1,WSaction,S);
-	{Tree1,Toks2}->
+	{Tree1,Toks2} ->
 	    seq2(T,Toks2,Rules,Tree++WS++[Tree1],WSaction,S)
     end.
 
-el_name(#xmlElement{name=Name})->
+el_name(#xmlElement{name=Name}) ->
     Name.
 
-parse_pcdata([#xmlText{}=H|T])->
+parse_pcdata([#xmlText{}=H|T]) ->
     parse_pcdata(T,[H]);
 parse_pcdata(H) ->
     {[],H}.
 
-parse_pcdata([#xmlText{}=H|T],Acc)->
+parse_pcdata([#xmlText{}=H|T],Acc) ->
     parse_pcdata(T,Acc++[H]);
 parse_pcdata(H,Acc) ->
     {Acc,H}.

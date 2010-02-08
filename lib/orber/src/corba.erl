@@ -205,6 +205,7 @@ orb_init(KeyValueList, _Name) ->
 %%-----------------------------------------------------------------
 resolve_initial_references(ObjectId) ->   
     resolve_initial_references(ObjectId, []).
+
 resolve_initial_references(ObjectId, Ctx) ->   
     case use_local_host(ObjectId) of
 	true ->
@@ -620,6 +621,7 @@ get_pid(Objkey) ->
 %% Returns    : Throws the exception.
 %% Description: 
 %%----------------------------------------------------------------------
+-spec raise(term()) -> no_return().
 raise(E) ->
     throw({'EXCEPTION', E}).
 

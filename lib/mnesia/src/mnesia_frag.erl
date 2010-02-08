@@ -209,7 +209,8 @@ first(ActivityId, Opaque, Tab) ->
 	    end
     end.
 
-search_first(ActivityId, Opaque, Tab, N, FH) when N =< FH#frag_state.n_fragments ->
+search_first(ActivityId, Opaque, Tab, N,
+	     #frag_state{n_fragments = N_frags} = FH) when N =< N_frags ->
     NextN = N + 1,
     NextFrag = n_to_frag_name(Tab, NextN),
     case mnesia:first(ActivityId, Opaque, NextFrag) of
@@ -284,7 +285,8 @@ next(ActivityId, Opaque, Tab, Key) ->
 	    end
     end.
 
-search_next(ActivityId, Opaque, Tab, N, FH) when N < FH#frag_state.n_fragments ->
+search_next(ActivityId, Opaque, Tab, N,
+	    #frag_state{n_fragments = N_frags} = FH) when N < N_frags ->
     NextN = N + 1,
     NextFrag = n_to_frag_name(Tab, NextN),
     case mnesia:first(ActivityId, Opaque, NextFrag) of
@@ -851,15 +853,17 @@ make_add_frag(Tab, SortedNs) ->
 
     [BaseOp, NewOp | SplitOps].
 
-replace_frag_hash(Cs, FH) when is_record(FH, frag_state) ->
+replace_frag_hash(Cs, #frag_state{hash_module = Hash_module,
+				  hash_state = Hash_state,
+				  n_fragments = N_fragments}) ->
     Fun = fun(Prop) ->
 		  case Prop of
 		      {n_fragments, _} ->
-			  {true, {n_fragments, FH#frag_state.n_fragments}};
+			  {true, {n_fragments, N_fragments}};
 		      {hash_module, _} ->
-			  {true, {hash_module, FH#frag_state.hash_module}};
+			  {true, {hash_module, Hash_module}};
 		      {hash_state, _} ->
-			  {true, {hash_state, FH#frag_state.hash_state}};
+			  {true, {hash_state, Hash_state}};
 		      {next_n_to_split, _} ->
 			  false;
 		      {n_doubles, _} ->
@@ -1143,7 +1147,7 @@ val(Var) ->
 
 set_frag_hash(Tab, Props) ->
     case props_to_frag_hash(Tab, Props) of
-	FH when is_record(FH, frag_state) ->
+	#frag_state{} = FH ->
 	    mnesia_lib:set({Tab, frag_hash}, FH);
 	no_hash ->
 	    mnesia_lib:unset({Tab, frag_hash})
@@ -1181,8 +1185,8 @@ props_to_frag_hash(Tab, Props) ->
 
 lookup_prop(Tab, Prop) ->
     Props = val({Tab, frag_properties}),
-    case lists:keysearch(Prop, 1,  Props) of
-	{value, {Prop, Val}} ->
+    case lists:keyfind(Prop, 1,  Props) of
+	{Prop, Val} ->
 	    Val;
 	false ->
 	    mnesia:abort({no_exists, Tab, Prop, {frag_properties, Props}})
@@ -1190,7 +1194,7 @@ lookup_prop(Tab, Prop) ->
 
 lookup_frag_hash(Tab) ->
     case ?catch_val({Tab, frag_hash}) of
-	FH when is_record(FH, frag_state) ->
+	#frag_state{} = FH ->
 	    FH;
 	{frag_hash, K, N, _S, _D} = FH ->
 	    %% Old style. Kept for backwards compatibility.

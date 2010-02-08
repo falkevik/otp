@@ -65,9 +65,7 @@ call(ChannelPid, Msg) ->
     call(ChannelPid, Msg, infinity).
 
 call(ChannelPid, Msg, TimeOute) ->
-    try gen_server:call(ChannelPid, Msg, TimeOute) of
-	Result ->
-	    Result
+    try gen_server:call(ChannelPid, Msg, TimeOute)
     catch 
  	exit:{noproc, _} ->
  	    {error, closed};
@@ -154,15 +152,15 @@ init([Options]) ->
 			   channel_state = ChannelState},
 	    self() ! {ssh_channel_up, ChannelId, ConnectionManager}, 
 	    {ok, State, Timeout};
-	{stop, Why} ->
-	    {stop, Why}
+	{stop, _Why} = Stop ->
+	    Stop
     catch 
 	_:Reason ->
 	    {stop, Reason}
     end.
 
 %%--------------------------------------------------------------------
-%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
+%% Function: handle_call(Request, From, State) -> {reply, Reply, State} |
 %%                                      {reply, Reply, State, Timeout} |
 %%                                      {noreply, State} |
 %%                                      {noreply, State, Timeout} |
@@ -180,7 +178,6 @@ handle_call(Request, From, #state{channel_cb = Module,
 	   {noreply, State}
    end.
 
-
 %%--------------------------------------------------------------------
 %% Function: handle_cast(Msg, State) -> {noreply, State} |
 %%                                      {noreply, State, Timeout} |
@@ -189,7 +186,6 @@ handle_call(Request, From, #state{channel_cb = Module,
 %%--------------------------------------------------------------------
 handle_cast(Msg, #state{channel_cb = Module, 
 			channel_state = ChannelState} = State) ->
-    
     try Module:handle_cast(Msg, ChannelState) of
 	Result ->
 	    handle_cb_result(Result, State)
@@ -309,13 +305,13 @@ cache_find(ChannelPid, Cache) ->
 handle_cb_result({reply, Reply, ChannelState}, State) ->
     {reply, Reply, State#state{channel_state = ChannelState}};
 handle_cb_result({reply, Reply, ChannelState, Timeout}, State) ->
-    {reply, Reply,State#state{channel_state = ChannelState}, Timeout};
+    {reply, Reply, State#state{channel_state = ChannelState}, Timeout};
 handle_cb_result({noreply, ChannelState}, State) ->
     {noreply, State#state{channel_state = ChannelState}};
 handle_cb_result({noreply, ChannelState, Timeout}, State) ->
     {noreply, State#state{channel_state = ChannelState}, Timeout};
 handle_cb_result({stop, Reason, Reply, ChannelState}, State) ->
-    {stop, Reason, Reply,  State#state{channel_state = ChannelState}};
+    {stop, Reason, Reply, State#state{channel_state = ChannelState}};
 handle_cb_result({stop, Reason, ChannelState}, State) ->
     {stop, Reason, State#state{channel_state = ChannelState}}.
 

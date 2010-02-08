@@ -201,8 +201,8 @@ check_simpleType(Unknown,Value,_S) ->
 
 check_decimal(Value) ->
     case string:tokens(Value,".") of
-	L when length(L) == 1; length(L) == 2 ->
-	    _ = [list_to_integer(X)||X <- L],
+	L when length(L) =:= 1; length(L) =:= 2 ->
+	    lists:foreach(fun(X) -> list_to_integer(X) end, L),
 	    {ok,Value};
 	_ ->
 	    {error,{value_not_decimal,Value}}
@@ -229,9 +229,11 @@ check_float(Value) ->
     case string:tokens(Value,"eE") of
 	[Mantissa,Exponent] ->
 	    {ok,_} = check_decimal(Mantissa),
-	    {ok,_} = check_integer(Exponent);
+	    {ok,_} = check_integer(Exponent),
+	    ok;
 	[Mantissa] ->
-	    check_decimal(Mantissa)
+	    {ok,_} = check_decimal(Mantissa),
+	    ok
     end,
     {ok,Value}.
 %%     case {check_decimal(Mantissa),
@@ -365,7 +367,7 @@ check_dateTime("+"++_DateTime) ->
 check_dateTime(DateTime) ->
     [Date,Time] = string:tokens(DateTime,"T"),
     [Y,M,D] = string:tokens(Date,"-"),
-    check_year(Y),
+    {ok,_} = check_year(Y),
     {ok,_} = check_positive_integer(M),
     {ok,_} = check_positive_integer(D),
     check_time(Time).
