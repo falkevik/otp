@@ -225,6 +225,8 @@ set_config_flags ()
 	export CONFIG_FLAGS;
 }
 
+NL="\
+"
 create_lib_configure_in()
 {
     cd $ERL_TOP
@@ -241,7 +243,7 @@ create_lib_configure_in()
 	    lib/*)
 		if [ -f "$lib_app/configure.in" ]; then
 		    app=`echo "$lib_app" | sed "s|lib/\(.*\)|\1|"`
-		    sdirs="${sdirs}test ! -f $app/configure || AC_CONFIG_SUBDIRS($app/.)\n"
+		    sdirs="${sdirs}test ! -f $app/configure || AC_CONFIG_SUBDIRS($app/.)${NL}"
 		fi;;
 	    *)
 		;;
@@ -258,7 +260,7 @@ create_lib_configure_in()
 	done
 	if [ $is_bapp = false ] && [ -f "$lib_app/configure.in" ]; then
 	    app=`echo "$lib_app" | sed "s|lib/\(.*\)|\1|"`
-	    sdirs="${sdirs}    test ! -f $app/configure || AC_CONFIG_SUBDIRS($app/.)\n"
+	    sdirs="${sdirs}    test ! -f $app/configure || AC_CONFIG_SUBDIRS($app/.)${NL}"
 	fi
     done
 
