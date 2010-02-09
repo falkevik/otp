@@ -610,7 +610,7 @@ connection(hello, State = #state{host = Host, port = Port,
 %% gen_fsm:sync_send_event/2,3, the instance of this function with the same
 %% name as the current state name StateName is called to handle the event.
 %%--------------------------------------------------------------------
-connection({application_data, Data}, _From, 
+connection({application_data, Data0}, _From,
            State = #state{socket = Socket,
                           negotiated_version = Version,
                           transport_cb = Transport,
@@ -618,6 +618,7 @@ connection({application_data, Data}, _From,
     %% We should look into having a worker process to do this to 
     %% parallize send and receive decoding and not block the receiver
     %% if sending is overloading the socket.
+    Data = encode_packet(Data0, State#state.socket_options),
     {Msgs, ConnectionStates1} = encode_data(Data, Version, ConnectionStates0),
     Result = Transport:send(Socket, Msgs),
     {reply, Result, 
@@ -1403,6 +1404,25 @@ encode_handshake(HandshakeRec, SigAlg, Version, ConnectionStates0, Hashes0) ->
     {E, ConnectionStates1} =
         ssl_record:encode_handshake(Frag, Version, ConnectionStates0),
     {E, ConnectionStates1, Hashes1}.
+
+encode_packet(Data, #socket_options{packet=Packet}) ->
+    case Packet of
+	0 ->
+	    Data;
+	1 ->
+	    encode_size_packet(Data, 8);
+	2 ->
+	    encode_size_packet(Data, 16);
+	4 ->
+	    encode_size_packet(Data, 32);
+	_ ->
+	    throw({badarg, {packet, Packet}})
+    end.
+
+encode_size_packet(Data, Size) ->
+    Bin = iolist_to_binary(Data),
+    Len = byte_size(Bin),
+    <<Len:Size/integer, Bin/binary>>.
 
 encode_data(Data, Version, ConnectionStates) ->
     ssl_record:encode_data(Data, Version, ConnectionStates).
