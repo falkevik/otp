@@ -413,7 +413,7 @@ setup_bif_timer(Uint32 xflags,
 	rp = erts_pid2proc(c_p, ERTS_PROC_LOCK_MAIN,
 			   receiver, ERTS_PROC_LOCK_MSGQ);
 	if (!rp)
-	    return ref;
+	    return THE_NON_VALUE;
     }
 
     if (timeout < ERTS_ALC_MIN_LONG_LIVED_TIME) {
