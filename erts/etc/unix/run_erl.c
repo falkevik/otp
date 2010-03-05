@@ -997,6 +997,7 @@ static int open_pty_slave(char *name)
     return -1;
   }
 
+
 #if defined(__sun) && defined(__SVR4)
   /* Load the necessary STREAMS modules for Solaris */
   if ((ioctl(sfd, I_FIND, "ldterm")) < 0) {
@@ -1032,25 +1033,6 @@ static int open_pty_slave(char *name)
     tty_rmode.c_iflag &= ~IXON;
     if (tcsetattr(sfd, TCSANOW, &tty_rmode) < 0) {
       fprintf(stderr, "Cannot disable terminal's flow control on output\n");
-      exit(-1);
-    }
-  }
-
-  if (getenv("RUN_ERL_DISABLE_FLOWCNTRL")) {
-    if (tcgetattr(sfd, &tty_rmode) < 0) {
-      fprintf(stderr, "Cannot get terminals current mode\n");
-      exit(-1);
-    }
-
-    tty_rmode.c_iflag &= ~IXOFF;
-    if (tcsetattr(sfd, TCSANOW, &tty_rmode) < 0) {
-      fprintf(stderr, "Cannot disable terminals flow control on input\n");
-      exit(-1);
-    }
-
-    tty_rmode.c_iflag &= ~IXON;
-    if (tcsetattr(sfd, TCSANOW, &tty_rmode) < 0) {
-      fprintf(stderr, "Cannot disable terminals flow control on output\n");
       exit(-1);
     }
   }
