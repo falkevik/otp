@@ -27,7 +27,6 @@
 -include("ssl_cipher.hrl").
 -include("ssl_internal.hrl").
 -include("ssl_record.hrl"). 			
--include("ssl_debug.hrl").
 
 -export([master_secret/3, finished/3, certificate_verify/2, mac_hash/7, 
 	 setup_keys/6, suites/0]).
@@ -132,15 +131,12 @@ mac_hash(Method, Mac_write_secret, Seq_num, Type, {Major, Minor},
     case Method of
         ?NULL -> ok;
         _ ->
-	    ?DBG_HEX(Mac_write_secret),
-	    ?DBG_HEX(hash(Method, Fragment)),
             ok
     end,
     Mac = hmac_hash(Method, Mac_write_secret, 
 		    [<<?UINT64(Seq_num), ?BYTE(Type), 
 		      ?BYTE(Major), ?BYTE(Minor), ?UINT16(Length)>>, 
 		     Fragment]),
-    ?DBG_HEX(Mac),
     Mac.
 
 -spec suites() -> [cipher_suite()].

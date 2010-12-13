@@ -239,6 +239,8 @@ typedef DWORD ethr_tsd_key;
 #      include "gcc/ethread.h"
 #      include "libatomic_ops/ethread.h"
 #    endif
+#  elif defined(ETHR_HAVE_LIBATOMIC_OPS)
+#    include "libatomic_ops/ethread.h"
 #  elif defined(ETHR_WIN32_THREADS)
 #    include "win/ethread.h"
 #  endif
@@ -757,7 +759,7 @@ ETHR_INLINE_FUNC_NAME_(ethr_atomic_set_relb)(ethr_atomic_t *var, long val)
 #ifdef ETHR_HAVE_NATIVE_ATOMICS
     ethr_native_atomic_set_relb(var, val);
 #else
-    return ETHR_INLINE_FUNC_NAME_(ethr_atomic_set)(var, val);
+    ETHR_INLINE_FUNC_NAME_(ethr_atomic_set)(var, val);
 #endif
 }
 

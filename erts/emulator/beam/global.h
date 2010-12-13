@@ -522,6 +522,7 @@ union erl_off_heap_ptr {
     struct erl_fun_thing* fun;
     struct external_thing_* ext;
     Eterm* ep;
+    void* voidp;
 };
 
 /* arrays that get malloced at startup */
@@ -1595,6 +1596,19 @@ Sint erts_binary_set_loop_limit(Sint limit);
 /* erl_unicode.c */
 void erts_init_unicode(void);
 Sint erts_unicode_set_loop_limit(Sint limit);
+
+void erts_native_filename_put(Eterm ioterm, int encoding, byte *p) ;
+Sint erts_native_filename_need(Eterm ioterm, int encoding);
+void erts_copy_utf8_to_utf16_little(byte *target, byte *bytes, int num_chars);
+int erts_analyze_utf8(byte *source, Uint size, 
+			byte **err_pos, Uint *num_chars, int *left);
+char *erts_convert_filename_to_native(Eterm name, ErtsAlcType_t alloc_type, int allow_empty);
+
+#define ERTS_UTF8_OK 0
+#define ERTS_UTF8_INCOMPLETE 1
+#define ERTS_UTF8_ERROR 2
+#define ERTS_UTF8_ANALYZE_MORE 3
+
 /* erl_trace.c */
 void erts_init_trace(void);
 void erts_trace_check_exiting(Eterm exiting);
@@ -1727,11 +1741,6 @@ Eterm erts_gc_binary_part_2(Process* p, Eterm* reg, Uint live);
 Uint erts_current_reductions(Process* current, Process *p);
 
 int erts_print_system_version(int to, void *arg, Process *c_p);
-
-/*
- * Interface to erl_init
- */
-void erl_init(void);
 
 #define seq_trace_output(token, msg, type, receiver, process) \
 seq_trace_output_generic((token), (msg), (type), (receiver), (process), NIL)

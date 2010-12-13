@@ -138,11 +138,17 @@ cl(["-pa", Path|T]) ->
     true -> cl(T);
     {error, _} -> error("Bad directory for -pa: "++Path)
   end;
-cl(["--plt", PLT|T]) ->
-  put(dialyzer_init_plt, PLT),
-  cl(T);
 cl(["--plt"]) ->
   error("No plt specified for --plt");
+cl(["--plt", PLT|T]) ->
+  put(dialyzer_init_plts, [PLT]),
+  cl(T);
+cl(["--plts"]) ->
+  error("No plts specified for --plts");
+cl(["--plts"|T]) ->
+  {PLTs, NewT} = get_plts(T, []),
+  put(dialyzer_init_plts, PLTs),
+  cl(NewT);
 cl(["-q"|T]) ->
   put(dialyzer_options_report_mode, quiet),
   cl(T);
@@ -284,7 +290,7 @@ common_options() ->
   [{defines, get(dialyzer_options_defines)},
    {from, get(dialyzer_options_from)},
    {include_dirs, get(dialyzer_include)},
-   {init_plt, get(dialyzer_init_plt)},
+   {plts, get(dialyzer_init_plts)},
    {output_plt, get(dialyzer_output_plt)},
    {report_mode, get(dialyzer_options_report_mode)},
    {use_spec, get(dialyzer_options_use_contracts)},
@@ -309,6 +315,13 @@ get_lib_dir([], Acc) ->
 
 %%-----------------------------------------------------------------------
 
+get_plts(["--"|T], Acc) -> {lists:reverse(Acc), T};
+get_plts(["-"++_Opt = H|T], Acc) -> {lists:reverse(Acc), [H|T]};
+get_plts([H|T], Acc) -> get_plts(T, [H|Acc]);
+get_plts([], Acc) -> {lists:reverse(Acc), []}.
+
+%%-----------------------------------------------------------------------
+
 help_warnings() ->
   S = warning_options_msg(),
   io:put_chars(S),
@@ -316,9 +329,10 @@ help_warnings() ->
 
 help_message() ->
   S = "Usage: dialyzer [--help] [--version] [--shell] [--quiet] [--verbose]
-		[-pa dir]* [--plt plt] [-Ddefine]* [-I include_dir]* 
-		[--output_plt file] [-Wwarn]* [--src] [--gui | --wx]
-		[files_or_dirs] [-r dirs] [--apps applications] [-o outfile]
+		[-pa dir]* [--plt plt] [--plts plt*] [-Ddefine]*
+                [-I include_dir]* [--output_plt file] [-Wwarn]*
+                [--src] [--gui | --wx] [files_or_dirs] [-r dirs]
+                [--apps applications] [-o outfile]
 		[--build_plt] [--add_to_plt] [--remove_from_plt]
 		[--check_plt] [--no_check_plt] [--plt_info] [--get_warnings]
                 [--no_native]
@@ -326,13 +340,13 @@ Options:
   files_or_dirs (for backwards compatibility also as: -c files_or_dirs)
       Use Dialyzer from the command line to detect defects in the
       specified files or directories containing .erl or .beam files,
-      depending on the type of the analysis
+      depending on the type of the analysis.
   -r dirs
       Same as the previous but the specified directories are searched
       recursively for subdirectories containing .erl or .beam files in
-      them, depending on the type of analysis
+      them, depending on the type of analysis.
   --apps applications
-      Option typically used when building or modifying a PLT as in:
+      Option typically used when building or modifying a plt as in:
         dialyzer --build_plt --apps erts kernel stdlib mnesia ...
       to conveniently refer to library applications corresponding to the
       Erlang/OTP installation. However, the option is general and can also
@@ -341,73 +355,86 @@ Options:
         dialyzer --apps inets ssl ./ebin ../other_lib/ebin/my_module.beam
   -o outfile (or --output outfile)
       When using Dialyzer from the command line, send the analysis
-      results to the specified \"outfile\" rather than to stdout
+      results to the specified outfile rather than to stdout.
   --raw
       When using Dialyzer from the command line, output the raw analysis
       results (Erlang terms) instead of the formatted result.
       The raw format is easier to post-process (for instance, to filter
-      warnings or to output HTML pages)
+      warnings or to output HTML pages).
   --src
       Override the default, which is to analyze BEAM files, and
-      analyze starting from Erlang source code instead
+      analyze starting from Erlang source code instead.
   -Dname (or -Dname=value)
-      When analyzing from source, pass the define to Dialyzer (**)
+      When analyzing from source, pass the define to Dialyzer. (**)
   -I include_dir
-      When analyzing from source, pass the include_dir to Dialyzer (**)
+      When analyzing from source, pass the include_dir to Dialyzer. (**)
   -pa dir
       Include dir in the path for Erlang (useful when analyzing files
-      that have '-include_lib()' directives)
+      that have '-include_lib()' directives).
   --output_plt file
-      Store the plt at the specified file after building it
+      Store the plt at the specified file after building it.
   --plt plt
       Use the specified plt as the initial plt (if the plt was built 
-      during setup the files will be checked for consistency)
+      during setup the files will be checked for consistency).
+  --plts plt*
+      Merge the specified plts to create the initial plt -- requires
+      that the plts are disjoint (i.e., do not have any module
+      appearing in more than one plt).
+      The plts are created in the usual way:
+        dialyzer --build_plt --output_plt plt_1 files_to_include
+        ...
+        dialyzer --build_plt --output_plt plt_n files_to_include
+      and then can be used in either of the following ways:
+        dialyzer files_to_analyze --plts plt_1 ... plt_n
+      or:
+        dialyzer --plts plt_1 ... plt_n -- files_to_analyze
+      (Note the -- delimiter in the second case)
   -Wwarn
       A family of options which selectively turn on/off warnings
-      (for help on the names of warnings use dialyzer -Whelp)
+      (for help on the names of warnings use dialyzer -Whelp).
   --shell
-      Do not disable the Erlang shell while running the GUI
+      Do not disable the Erlang shell while running the GUI.
   --version (or -v)
-      Prints the Dialyzer version and some more information and exits
+      Print the Dialyzer version and some more information and exit.
   --help (or -h)
-      Prints this message and exits
+      Print this message and exit.
   --quiet (or -q)
-      Makes Dialyzer a bit more quiet
+      Make Dialyzer a bit more quiet.
   --verbose
-      Makes Dialyzer a bit more verbose
+      Make Dialyzer a bit more verbose.
   --build_plt
       The analysis starts from an empty plt and creates a new one from the
       files specified with -c and -r. Only works for beam files.
-      Use --plt or --output_plt to override the default plt location.
+      Use --plt(s) or --output_plt to override the default plt location.
   --add_to_plt
       The plt is extended to also include the files specified with -c and -r.
-      Use --plt to specify wich plt to start from, and --output_plt to 
-      specify where to put the plt. Note that the analysis might include 
-      files from the plt if they depend on the new files. 
+      Use --plt(s) to specify which plt to start from, and --output_plt to
+      specify where to put the plt. Note that the analysis might include
+      files from the plt if they depend on the new files.
       This option only works with beam files.
   --remove_from_plt
       The information from the files specified with -c and -r is removed
       from the plt. Note that this may cause a re-analysis of the remaining
       dependent files.
   --check_plt
-      Checks the plt for consistency and rebuilds it if it is not up-to-date.
+      Check the plt for consistency and rebuild it if it is not up-to-date.
       Actually, this option is of rare use as it is on by default.
   --no_check_plt (or -n)
       Skip the plt check when running Dialyzer. Useful when working with
       installed plts that never change.
   --plt_info
-      Makes Dialyzer print information about the plt and then quit. The plt 
-      can be specified with --plt.
+      Make Dialyzer print information about the plt and then quit. The plt
+      can be specified with --plt(s).
   --get_warnings
-      Makes Dialyzer emit warnings even when manipulating the plt. Only 
-      emits warnings for files that are actually analyzed.
+      Make Dialyzer emit warnings even when manipulating the plt. Warnings
+      are only emitted for files that are actually analyzed.
   --dump_callgraph file
       Dump the call graph into the specified file whose format is determined
       by the file name extension. Supported extensions are: raw, dot, and ps.
       If something else is used as file name extension, default format '.raw'
       will be used.
   --no_native (or -nn)
-      Bypass the native code compilation of some key files that dialyzer
+      Bypass the native code compilation of some key files that Dialyzer
       heuristically performs when dialyzing many files; this avoids the
       compilation time but it may result in (much) longer analysis time.
   --gui

@@ -386,14 +386,24 @@ AC_DEFUN(LM_SYS_IPV6,
 AC_CACHE_VAL(ac_cv_sys_ipv6_support,
 [ok_so_far=yes
  AC_TRY_COMPILE([#include <sys/types.h>
-#include <netinet/in.h>],
+#ifdef __WIN32__
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <netinet/in.h>
+#endif],
    [struct in6_addr a6; struct sockaddr_in6 s6;], ok_so_far=yes, ok_so_far=no)
 
 if test $ok_so_far = yes; then
   ac_cv_sys_ipv6_support=yes
 else
   AC_TRY_COMPILE([#include <sys/types.h>
-#include <netinet/in.h>],
+#ifdef __WIN32__
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <netinet/in.h>
+#endif],
     [struct in_addr6 a6; struct sockaddr_in6 s6;],
     ac_cv_sys_ipv6_support=in_addr6, ac_cv_sys_ipv6_support=no)
 fi
@@ -994,8 +1004,8 @@ case "$THR_LIB_NAME" in
 
 	case "$host_cpu" in
 	  sun4u | sparc64 | sun4v)
-		ethr_have_native_atomics=yes;;
-	  i86pc | i386 | i486 | i586 | i686 | x86_64 | amd64)
+		ethr_have_native_atomics=yes;; 
+	  i86pc | i*86 | x86_64 | amd64)
 		ethr_have_native_atomics=yes;;
 	  macppc | ppc | "Power Macintosh")
 		ethr_have_native_atomics=yes;;
@@ -1090,7 +1100,7 @@ test "X$disable_native_ethr_impls" = "Xyes" &&
 
 AC_ARG_ENABLE(prefer-gcc-native-ethr-impls,
 	      AS_HELP_STRING([--enable-prefer-gcc-native-ethr-impls],
-			     [enable prefer gcc native ethread implementations]),
+			     [prefer gcc native ethread implementations]),
 [ case "$enableval" in
     yes) enable_prefer_gcc_native_ethr_impls=yes ;;
     *)  enable_prefer_gcc_native_ethr_impls=no ;;
@@ -1099,20 +1109,59 @@ AC_ARG_ENABLE(prefer-gcc-native-ethr-impls,
 test $enable_prefer_gcc_native_ethr_impls = yes &&
   AC_DEFINE(ETHR_PREFER_GCC_NATIVE_IMPLS, 1, [Define if you prefer gcc native ethread implementations])
 
+AC_ARG_WITH(libatomic_ops,
+	    AS_HELP_STRING([--with-libatomic_ops=PATH],
+			   [specify and prefer usage of libatomic_ops in the ethread library]))
+
 AC_ARG_ENABLE(ethread-pre-pentium4-compatibility,
 	      AS_HELP_STRING([--enable-ethread-pre-pentium4-compatibility],
 			     [enable compatibility with x86 processors before pentium 4 (back to 486) in the ethread library]),
-[ case "$enableval" in
-    yes) enable_ethread_pre_pentium4_compatibility=yes ;;
-    *)  enable_ethread_pre_pentium4_compatibilit=no ;;
-  esac ], enable_ethread_pre_pentium4_compatibilit=no)
+[
+  case "$enable_ethread_pre_pentium4_compatibility" in
+    yes|no) ;;
+    *) enable_ethread_pre_pentium4_compatibility=check;;
+  esac
+],
+[enable_ethread_pre_pentium4_compatibility=check])
 
-test $enable_ethread_pre_pentium4_compatibilit = yes &&
+test "$cross_compiling" != "yes" || enable_ethread_pre_pentium4_compatibility=no
+
+case "$enable_ethread_pre_pentium4_compatibility-$host_cpu" in
+  check-i86pc | check-i*86)
+    AC_MSG_CHECKING([whether pre pentium 4 compatibility should forced])
+    AC_RUN_IFELSE([
+#if defined(__GNUC__)
+#  if defined(ETHR_PREFER_LIBATOMIC_OPS_NATIVE_IMPLS)
+#    define CHECK_LIBATOMIC_OPS__
+#  else
+#    define CHECK_GCC_ASM__
+#  endif
+#elif defined(ETHR_HAVE_LIBATOMIC_OPS)
+#  define CHECK_LIBATOMIC_OPS__
+#endif
+#if defined(CHECK_LIBATOMIC_OPS__)
+#include "atomic_ops.h"
+#endif
+int main(void)
+{
+#if defined(CHECK_GCC_ASM__)
+    __asm__ __volatile__("mfence" : : : "memory");
+#elif defined(CHECK_LIBATOMIC_OPS__)
+    AO_nop_full();
+#endif
+    return 0;
+}
+	],
+	[enable_ethread_pre_pentium4_compatibility=no],
+	[enable_ethread_pre_pentium4_compatibility=yes],
+	[enable_ethread_pre_pentium4_compatibility=no])
+    AC_MSG_RESULT([$enable_ethread_pre_pentium4_compatibility]);;
+  *)
+    ;;
+esac
+
+test $enable_ethread_pre_pentium4_compatibility = yes &&
   AC_DEFINE(ETHR_PRE_PENTIUM4_COMPAT, 1, [Define if you want compatibilty with x86 processors before pentium4.])
-
-AC_ARG_WITH(libatomic_ops,
-	    AS_HELP_STRING([--with-libatomic_ops=PATH],
-			   [use libatomic_ops with the ethread library]))
 
 AC_DEFINE(ETHR_HAVE_ETHREAD_DEFINES, 1, \
 [Define if you have all ethread defines])

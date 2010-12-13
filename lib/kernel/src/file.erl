@@ -75,25 +75,34 @@
 -define(RAM_FILE, ram_file).           % Module
 
 %% data types
--type filename()  :: string().
+-type filename()  :: string() | binary().
 -type file_info() :: #file_info{}.
 -type fd()        :: #file_descriptor{}.
 -type io_device() :: pid() | fd().
 -type location()  :: integer() | {'bof', integer()} | {'cur', integer()}
 		   | {'eof', integer()} | 'bof' | 'cur' | 'eof'.
--type mode()      :: 'read' | 'write' | 'append' | 'raw' | 'binary' | 
-		     {'delayed_write', non_neg_integer(), non_neg_integer()} | 
-		     'delayed_write' | {'read_ahead', pos_integer()} | 
-		     'read_ahead' | 'compressed' | 'exclusive'.
--type name()      :: string() | atom() | [name()].
--type posix()     :: atom().
+-type mode()      :: 'read' | 'write' | 'append'
+                   | 'exclusive' | 'raw' | 'binary'
+		   | {'delayed_write', non_neg_integer(), non_neg_integer()}
+		   | 'delayed_write' | {'read_ahead', pos_integer()}
+		   | 'read_ahead' | 'compressed'
+		   | {'encoding', unicode:encoding()}.
+-type name()      :: string() | atom() | [name()] | binary().
+-type posix()     :: 'eacces'  | 'eagain'  | 'ebadf'   | 'ebusy'  | 'edquot'
+		   | 'eexist'  | 'efault'  | 'efbig'   | 'eintr'  | 'einval'
+		   | 'eio'     | 'eisdir'  | 'eloop'   | 'emfile' | 'emlink'
+		   | 'enametoolong'
+		   | 'enfile'  | 'enodev'  | 'enoent'  | 'enomem' | 'enospc'
+		   | 'enotblk' | 'enotdir' | 'enotsup' | 'enxio'  | 'eperm'
+		   | 'epipe'   | 'erofs'   | 'espipe'  | 'esrch'  | 'estale'
+		   | 'exdev'.
 -type bindings()  :: any().
 
 -type date()      :: {pos_integer(), pos_integer(), pos_integer()}.
 -type time()      :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}.
 -type date_time() :: {date(), time()}.
--type posix_file_advise() :: 'normal' | 'sequential' | 'random' | 'no_reuse' |
-                            'will_need' | 'dont_need'.
+-type posix_file_advise() :: 'normal' | 'sequential' | 'random'
+                           | 'no_reuse' | 'will_need' | 'dont_need'.
 
 %%%-----------------------------------------------------------------
 %%% General functions
@@ -174,7 +183,7 @@ make_dir(Name) ->
 del_dir(Name) ->
     check_and_call(del_dir, [file_name(Name)]).
 
--spec read_file_info(Name :: name()) -> {'ok', #file_info{}} | {'error', posix()}.
+-spec read_file_info(Name :: name()) -> {'ok', file_info()} | {'error', posix()}.
 
 read_file_info(Name) ->
     check_and_call(read_file_info, [file_name(Name)]).
@@ -184,7 +193,7 @@ read_file_info(Name) ->
 altname(Name) ->
     check_and_call(altname, [file_name(Name)]).
 
--spec read_link_info(Name :: name()) -> {'ok', #file_info{}} | {'error', posix()}.
+-spec read_link_info(Name :: name()) -> {'ok', file_info()} | {'error', posix()}.
 
 read_link_info(Name) ->
     check_and_call(read_link_info, [file_name(Name)]).
@@ -194,7 +203,7 @@ read_link_info(Name) ->
 read_link(Name) ->
     check_and_call(read_link, [file_name(Name)]).
 
--spec write_file_info(Name :: name(), Info :: #file_info{}) ->
+-spec write_file_info(Name :: name(), Info :: file_info()) ->
 	'ok' | {'error', posix()}.
 
 write_file_info(Name, Info = #file_info{}) ->
@@ -205,7 +214,8 @@ write_file_info(Name, Info = #file_info{}) ->
 list_dir(Name) ->
     check_and_call(list_dir, [file_name(Name)]).
 
--spec read_file(Name :: name()) -> {'ok', binary()} | {'error', posix()}.
+-spec read_file(Name :: name()) ->
+	{'ok', binary()} | {'error', posix() | 'terminated' | 'system_limit'}.
 
 read_file(Name) ->
     check_and_call(read_file, [file_name(Name)]).
@@ -220,15 +230,15 @@ make_link(Old, New) ->
 make_symlink(Old, New) ->
     check_and_call(make_symlink, [file_name(Old), file_name(New)]).
 
--spec write_file(Name :: name(), Bin :: binary()) -> 'ok' | {'error', posix()}.
+-spec write_file(Name :: name(), Bin :: iodata()) ->
+	'ok' | {'error', posix() | 'terminated' | 'system_limit'}.
 
 write_file(Name, Bin) ->
     check_and_call(write_file, [file_name(Name), make_binary(Bin)]).
 
 %% This whole operation should be moved to the file_server and prim_file
 %% when it is time to change file server protocol again.
-%% Meanwhile, it is implemented here, slihtly less efficient.
-%%
+%% Meanwhile, it is implemented here, slightly less efficient.
 
 -spec write_file(Name :: name(), Bin :: binary(), Modes :: [mode()]) -> 
 	'ok' | {'error', posix()}.
@@ -286,7 +296,7 @@ raw_write_file_info(Name, #file_info{} = Info) ->
 %% Contemporary mode specification - list of options
 
 -spec open(Name :: name(), Modes :: [mode()]) ->
-	{'ok', io_device()} | {'error', posix()}.
+	{'ok', io_device()} | {'error', posix() | 'system_limit'}.
 
 open(Item, ModeList) when is_list(ModeList) ->
     case lists:member(raw, ModeList) of
@@ -339,7 +349,7 @@ open(Item, Mode) ->
 %%% The File argument must be either a Pid or a handle 
 %%% returned from ?PRIM_FILE:open.
 
--spec close(File :: io_device()) -> 'ok' | {'error', posix()}.
+-spec close(File :: io_device()) -> 'ok' | {'error', posix() | 'terminated'}.
 
 close(File) when is_pid(File) ->
     R = file_request(File, close),
@@ -358,7 +368,7 @@ close(_) ->
     {error, badarg}.
 
 -spec advise(File :: io_device(), Offset :: integer(),
-        Length :: integer(), Advise :: posix_file_advise()) ->
+	     Length :: integer(), Advise :: posix_file_advise()) ->
 	'ok' | {'error', posix()}.
 
 advise(File, Offset, Length, Advise) when is_pid(File) ->
@@ -440,7 +450,7 @@ pread(_, _, _) ->
     {error, badarg}.
 
 -spec write(File :: io_device() | atom(), Byte :: iodata()) ->
-	'ok' | {'error', posix()}.
+	'ok' | {'error', posix() | 'terminated'}.
 
 write(File, Bytes) when (is_pid(File) orelse is_atom(File)) ->
     case make_binary(Bytes) of
@@ -1024,22 +1034,26 @@ path_open_first([], _Name, _Mode, LastError) ->
 %% 	Generates a flat file name from a deep list of atoms and 
 %% 	characters (integers).
 
+file_name(N) when is_binary(N) ->
+    N;
 file_name(N) ->
     try 
-        file_name_1(N)
+        file_name_1(N,file:native_name_encoding())
     catch Reason ->
         {error, Reason}
     end.
 
-file_name_1([C|T]) when is_integer(C), C > 0, C =< 255 ->
-    [C|file_name_1(T)];
-file_name_1([H|T]) ->
-    file_name_1(H) ++ file_name_1(T);
-file_name_1([]) ->
+file_name_1([C|T],latin1) when is_integer(C), C < 256->
+    [C|file_name_1(T,latin1)];
+file_name_1([C|T],utf8) when is_integer(C) ->
+    [C|file_name_1(T,utf8)];
+file_name_1([H|T],E) ->
+    file_name_1(H,E) ++ file_name_1(T,E);
+file_name_1([],_) ->
     [];
-file_name_1(N) when is_atom(N) ->
+file_name_1(N,_) when is_atom(N) ->
     atom_to_list(N);
-file_name_1(_) ->
+file_name_1(_,_) ->
     throw(badarg).
 
 make_binary(Bin) when is_binary(Bin) ->

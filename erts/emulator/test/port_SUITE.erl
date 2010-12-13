@@ -2302,14 +2302,35 @@ load_driver(Dir, Driver) ->
     end.
 
 
-close_deaf_port(doc) -> ["Send data to port program that does not read it, then close port."];
+close_deaf_port(doc) -> ["Send data to port program that does not read it, then close port."
+			 "Primary targeting Windows to test threaded_handle_closer in sys.c"];
 close_deaf_port(suite) -> [];
 close_deaf_port(Config) when is_list(Config) ->
     ?line Dog = test_server:timetrap(test_server:seconds(100)),
     ?line DataDir = ?config(data_dir, Config),
     ?line DeadPort = os:find_executable("dead_port", DataDir),
-
     ?line Port = open_port({spawn,DeadPort++" 60"},[]),
     ?line erlang:port_command(Port,"Hello, can you hear me!?!?"),
     ?line port_close(Port),
-    ok.
+
+    Res = close_deaf_port_1(0, DeadPort),
+    io:format("Waiting for OS procs to terminate...\n"),
+    receive after 5*1000 -> ok end,
+    ?line test_server:timetrap_cancel(Dog),
+    Res.
+
+close_deaf_port_1(1000, _) ->
+    ok;
+close_deaf_port_1(N, Cmd) ->
+    Timeout = integer_to_list(random:uniform(5*1000)),
+    ?line try open_port({spawn_executable,Cmd},[{args,[Timeout]}]) of
+    	Port ->
+	    ?line erlang:port_command(Port,"Hello, can you hear me!?!?"),
+	    ?line port_close(Port),
+	    close_deaf_port_1(N+1, Cmd)
+    catch
+    	_:eagain ->
+	    {comment, "Could not spawn more than " ++ integer_to_list(N) ++ " OS processes."}
+    end.
+    
+

@@ -541,6 +541,28 @@
 	<p>Calling <c>erlang:halt/1</c> with a string argument will still
 	produce a crash dump.</p>
       </item>
+      <tag><c><![CDATA[+e Number]]></c></tag>
+      <item>
+        <p>Set max number of ETS tables.</p>
+      </item>
+      <tag><c><![CDATA[+ec]]></c></tag>
+      <item>
+        <p>Force the <c>compressed</c> option on all ETS tables.
+              Only intended for test and evaluation.</p>
+      </item>
+      <tag><c><![CDATA[+fnl]]></c></tag>
+      <item>
+        <p>The VM works with file names as if they are encoded using the ISO-latin-1 encoding, disallowing Unicode characters with codepoints beyond 255. This is default on operating systems that have transparent file naming, i.e. all Unixes except MacOSX.</p>
+      </item>
+      <tag><c><![CDATA[+fnu]]></c></tag>
+      <item>
+        <p>The VM works with file names as if they are encoded using UTF-8 (or some other system specific Unicode encoding). This is the default on operating systems that enforce Unicode encoding, i.e. Windows and MacOSX.</p>
+	<p>By enabling Unicode file name translation on systems where this is not default, you open up to the possibility that some file names can not be interpreted by the VM and therefore will be returned to the program as raw binaries. The option is therefore considered experimental.</p>
+      </item>
+      <tag><c><![CDATA[+fna]]></c></tag>
+      <item>
+        <p>Selection between <c>+fnl</c> and <c>+fnu</c> is done based on the current locale settings in the OS, meaning that if you have set your terminal for UTF-8 encoding, the filesystem is expected to use the same encoding for filenames (use with care).</p>
+      </item>
       <tag><c><![CDATA[+hms Size]]></c></tag>
       <item>
         <p>Sets the default heap size of processes to the size
@@ -686,7 +708,7 @@
 	      </p></item>
 	    </taglist>
 	    <p>Binding of schedulers is currently only supported on newer
-	       Linux, Solaris, and Windows systems.</p>
+	       Linux, Solaris, FreeBSD, and Windows systems.</p>
 	    <p>If no CPU topology is available when the <c>+sbt</c> flag
 	       is processed and <c>BindType</c> is any other type than
 	       <c>u</c>, the runtime system will fail to start. CPU
@@ -905,6 +927,25 @@
           <c><![CDATA[error_logger:warning_map/0]]></c>. See
           <seealso marker="kernel:error_logger#warning_map/0">error_logger(3)</seealso>
           for further information.</p>
+      </item>
+      <tag><c><![CDATA[+zFlag Value]]></c></tag>
+      <item>
+        <p>Miscellaneous flags.</p>
+        <taglist>
+          <tag><marker id="+zdbbl"><c>+zdbbl size</c></marker></tag>
+          <item>
+            <p>Set the distribution buffer busy limit
+	    (<seealso marker="erlang#system_info_dist_buf_busy_limit">dist_buf_busy_limit</seealso>)
+	    in kilobytes. Valid range is 1-2097151. Default is 1024.</p>
+            <p>A larger buffer limit will allow processes to buffer
+            more outgoing messages over the distribution. When the
+            buffer limit has been reached, sending processes will be
+            suspended until the buffer size has shrunk. The buffer
+            limit is per distribution channel. A higher limit will
+            give lower latency and higher throughput at the expense
+            of higher memory usage.</p>
+          </item>
+        </taglist>
       </item>
     </taglist>
   </section>

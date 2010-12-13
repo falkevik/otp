@@ -53,7 +53,7 @@ while test -n "$1" ; do
 	    STDLIB_FORCED=true;
 	    STDLIB=LIBCMTD.LIB;; 
 	-lsocket)
-	    DEFAULT_LIBRARIES="$DEFAULT_LIBRARIES WS2_32.LIB";;
+	    DEFAULT_LIBRARIES="$DEFAULT_LIBRARIES WS2_32.LIB IPHLPAPI.LIB";;
 	-l*)
 	    y=`echo $x | sed 's,^-l\(.*\),\1,g'`;
 	    MPATH=`cygpath -m $y`;
@@ -158,7 +158,7 @@ else
 fi    
 	    
 p=$$
-CMD="$linktype -nologo -incremental:no $CMD $STDLIB $DEFAULT_LIBRARIES"
+CMD="$linktype -nologo -incremental:no -largeaddressaware $CMD $STDLIB $DEFAULT_LIBRARIES"
 if [ "X$LD_SH_DEBUG_LOG" != "X" ]; then
     echo ld.sh "$SAVE" >>$LD_SH_DEBUG_LOG
     echo link.exe $CMD >>$LD_SH_DEBUG_LOG
@@ -168,6 +168,7 @@ RES=$?
 CMANIFEST=`cygpath $MANIFEST`
 if [ "$RES" = "0" -a -f "$CMANIFEST" ]; then
     # Add stuff to manifest to turn off "virtualization"
+    sed -n -i '1h;1!H;${;g;s,<trustInfo.*</trustInfo>.,,g;p;}' $CMANIFEST
     sed -i "s/<\/assembly>/ <ms_asmv2:trustInfo xmlns:ms_asmv2=\"urn:schemas-microsoft-com:asm.v2\">\n  <ms_asmv2:security>\n   <ms_asmv2:requestedPrivileges>\n    <ms_asmv2:requestedExecutionLevel level=\"AsInvoker\" uiAccess=\"false\"\/>\n   <\/ms_asmv2:requestedPrivileges>\n  <\/ms_asmv2:security>\n <\/ms_asmv2:trustInfo>\n<\/assembly>/" $CMANIFEST
 
     eval mt.exe -nologo -manifest "$MANIFEST" -outputresource:"$OUTPUTRES" >>/tmp/link.exe.${p}.1 2>>/tmp/link.exe.${p}.2

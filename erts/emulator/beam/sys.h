@@ -466,8 +466,6 @@ static const int zero_value = 0, one_value = 1;
 #  endif /* !__WIN32__ */
 #endif /* WANT_NONBLOCKING */
 
-extern erts_cpu_info_t *erts_cpuinfo; /* erl_init.c */
-
 __decl_noreturn void __noreturn erl_exit(int n, char*, ...);
 
 /* Some special erl_exit() codes: */
@@ -1168,6 +1166,15 @@ void* sys_calloc2(Uint, Uint);
                             ((char*)(s))[3] = (char)(i)         & 0xff;} \
                         while (0)
 
+#define get_int24(s) ((((unsigned char*) (s))[0] << 16) | \
+                      (((unsigned char*) (s))[1] << 8)  | \
+                      (((unsigned char*) (s))[2]))
+
+#define put_int24(i, s) do {((char*)(s))[0] = (char)((i) >> 16) & 0xff;  \
+                            ((char*)(s))[1] = (char)((i) >> 8)  & 0xff;  \
+                            ((char*)(s))[2] = (char)(i)         & 0xff;} \
+                        while (0)
+
 #define get_int16(s) ((((unsigned char*)  (s))[0] << 8) | \
                       (((unsigned char*)  (s))[1]))
 
@@ -1180,6 +1187,7 @@ void* sys_calloc2(Uint, Uint);
 
 
 #define put_int8(i, s) do {((unsigned char*)(s))[0] = (i) & 0xff;} while (0)
+
 
 /*
  * Use DEBUGF as you would use printf, but use double parentheses:
@@ -1245,6 +1253,22 @@ char* win32_errorstr(int);
 
 #endif
 
+/************************************************************************
+ * Find out the native filename encoding of the process (look at locale of 
+ * Unix processes and just do UTF16 on windows 
+ ************************************************************************/
+#define ERL_FILENAME_UNKNOWN 0
+#define ERL_FILENAME_LATIN1 1
+#define ERL_FILENAME_UTF8 2
+#define ERL_FILENAME_UTF8_MAC 3
+#define ERL_FILENAME_WIN_WCHAR 4
+
+int erts_get_native_filename_encoding(void);
+/* The set function is only to be used by erl_init! */
+void erts_set_user_requested_filename_encoding(int encoding); 
+int erts_get_user_requested_filename_encoding(void);
+
+void erts_init_sys_common_misc(void);
 
 #endif
 

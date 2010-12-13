@@ -38,6 +38,7 @@
 #include "erl_instrument.h"
 #include "dist.h"
 #include "erl_gc.h"
+#include "erl_cpu_topology.h"
 #ifdef HIPE
 #include "hipe_arch.h"
 #endif
@@ -1687,6 +1688,8 @@ info_1_tuple(Process* BIF_P,	/* Pointer to current process. */
 	return erts_get_cpu_topology_term(BIF_P, *tp);
     } else if (ERTS_IS_ATOM_STR("cpu_topology", sel) && arity == 2) {
 	Eterm res = erts_get_cpu_topology_term(BIF_P, *tp);
+	if (res == THE_NON_VALUE)
+	    goto badarg;
 	ERTS_BIF_PREP_TRAP1(ret, erts_format_cpu_topology_trap, BIF_P, res);
 	return ret;
 #if defined(PURIFY) || defined(VALGRIND)
@@ -1999,6 +2002,8 @@ BIF_RETTYPE system_info_1(BIF_ALIST_1)
 	BIF_RET(db_get_trace_control_word_0(BIF_P));
     } else if (ERTS_IS_ATOM_STR("ets_realloc_moves", BIF_ARG_1)) {
  	BIF_RET((erts_ets_realloc_always_moves) ? am_true : am_false);
+    } else if (ERTS_IS_ATOM_STR("ets_always_compress", BIF_ARG_1)) {
+	BIF_RET((erts_ets_always_compress) ? am_true : am_false);
     } else if (ERTS_IS_ATOM_STR("snifs", BIF_ARG_1)) {
 	Uint size = 0;
 	Uint *szp;
@@ -2345,9 +2350,7 @@ BIF_RETTYPE system_info_1(BIF_ALIST_1)
     /* Arguments that are unusual follow ... */
     else if (ERTS_IS_ATOM_STR("logical_processors", BIF_ARG_1)) {
 	int no;
-	erts_smp_rwmtx_rlock(&erts_cpu_bind_rwmtx);
-	no = erts_get_cpu_configured(erts_cpuinfo);
-	erts_smp_rwmtx_runlock(&erts_cpu_bind_rwmtx);
+	erts_get_logical_processors(&no, NULL, NULL);
 	if (no > 0)
 	    BIF_RET(make_small((Uint) no));
 	else {
@@ -2357,9 +2360,7 @@ BIF_RETTYPE system_info_1(BIF_ALIST_1)
     }
     else if (ERTS_IS_ATOM_STR("logical_processors_online", BIF_ARG_1)) {
 	int no;
-	erts_smp_rwmtx_rlock(&erts_cpu_bind_rwmtx);
-	no = erts_get_cpu_online(erts_cpuinfo);
-	erts_smp_rwmtx_runlock(&erts_cpu_bind_rwmtx);
+	erts_get_logical_processors(NULL, &no, NULL);
 	if (no > 0)
 	    BIF_RET(make_small((Uint) no));
 	else {
@@ -2369,9 +2370,7 @@ BIF_RETTYPE system_info_1(BIF_ALIST_1)
     }
     else if (ERTS_IS_ATOM_STR("logical_processors_available", BIF_ARG_1)) {
 	int no;
-	erts_smp_rwmtx_rlock(&erts_cpu_bind_rwmtx);
-	no = erts_get_cpu_available(erts_cpuinfo);
-	erts_smp_rwmtx_runlock(&erts_cpu_bind_rwmtx);
+	erts_get_logical_processors(NULL, NULL, &no);
 	if (no > 0)
 	    BIF_RET(make_small((Uint) no));
 	else {
@@ -2533,6 +2532,13 @@ BIF_RETTYPE system_info_1(BIF_ALIST_1)
 	BIF_RET(erts_nif_taints(BIF_P));
     } else if (ERTS_IS_ATOM_STR("reader_groups_map", BIF_ARG_1)) {
 	BIF_RET(erts_get_reader_groups_map(BIF_P));
+    } else if (ERTS_IS_ATOM_STR("dist_buf_busy_limit", BIF_ARG_1)) {
+	Uint hsz = 0;
+
+ 	(void) erts_bld_uint(NULL, &hsz, erts_dist_buf_busy_limit);
+	hp = hsz ? HAlloc(BIF_P, hsz) : NULL;
+	res = erts_bld_uint(&hp, NULL, erts_dist_buf_busy_limit);
+	BIF_RET(res);
     }
 
     BIF_ERROR(BIF_P, BADARG);

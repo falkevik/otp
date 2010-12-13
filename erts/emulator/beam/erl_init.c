@@ -41,6 +41,7 @@
 #include "erl_printf_term.h"
 #include "erl_misc_utils.h"
 #include "packet_parser.h"
+#include "erl_cpu_topology.h"
 
 #ifdef HIPE
 #include "hipe_mode_switch.h"	/* for hipe_mode_switch_init() */
@@ -63,6 +64,8 @@ extern void ConNormalExit(void);
 extern void ConWaitForExit(void);
 #endif
 
+static void erl_init(int ncpu);
+
 #define ERTS_MIN_COMPAT_REL 7
 
 #ifdef ERTS_SMP
@@ -76,9 +79,6 @@ int erts_initialized = 0;
 static erts_tid_t main_thread;
 #endif
 
-erts_cpu_info_t *erts_cpuinfo;
-
-int erts_reader_groups;
 int erts_use_sender_punish;
 
 /*
@@ -111,7 +111,6 @@ int erts_compat_rel;
 static int use_multi_run_queue;
 static int no_schedulers;
 static int no_schedulers_online;
-static int max_reader_groups;
 
 #ifdef DEBUG
 Uint32 verbose;             /* See erl_debug.h for information about verbose */
@@ -230,18 +229,18 @@ void erl_error(char *fmt, va_list args)
     erts_vfprintf(stderr, fmt, args);
 }
 
-static void early_init(int *argc, char **argv);
+static int early_init(int *argc, char **argv);
 
 void
 erts_short_init(void)
 {
-    early_init(NULL, NULL);
-    erl_init();
+    int ncpu = early_init(NULL, NULL);
+    erl_init(ncpu);
     erts_initialized = 1;
 }
 
-void
-erl_init(void)
+static void
+erl_init(int ncpu)
 {
     init_benchmarking();
 
@@ -252,11 +251,12 @@ erl_init(void)
     erts_init_monitors();
     erts_init_gc();
     init_time();
-    erts_init_process();
+    erts_init_sys_common_misc();
+    erts_init_process(ncpu);
     erts_init_scheduling(use_multi_run_queue,
 			 no_schedulers,
 			 no_schedulers_online);
-
+    erts_init_cpu_topology(); /* Must be after init_scheduling */
     H_MIN_SIZE      = erts_next_heap_size(H_MIN_SIZE, 0);
     BIN_VH_MIN_SIZE = erts_next_heap_size(BIN_VH_MIN_SIZE, 0);
 
@@ -535,7 +535,8 @@ void erts_usage(void)
 
     erts_fprintf(stderr, "-W<i|w>     set error logger warnings mapping,\n");
     erts_fprintf(stderr, "            see error_logger documentation for details\n");
-
+    erts_fprintf(stderr, "-zdbbl size set the distribution buffer busy limit in kilobytes\n");
+    erts_fprintf(stderr, "            valid range is [1-%d]\n", INT_MAX/1024);
     erts_fprintf(stderr, "\n");
     erts_fprintf(stderr, "Note that if the emulator is started with erlexec (typically\n");
     erts_fprintf(stderr, "from the erl script), these flags should be specified with +.\n");
@@ -587,7 +588,7 @@ static void ethr_ll_free(void *ptr)
 
 #endif
 
-static void
+static int
 early_init(int *argc, char **argv) /*
 				   * Only put things here which are
 				   * really important initialize
@@ -600,6 +601,10 @@ early_init(int *argc, char **argv) /*
     int ncpuavail;
     int schdlrs;
     int schdlrs_onln;
+    int max_main_threads;
+    int max_reader_groups;
+    int reader_groups;
+
     use_multi_run_queue = 1;
     erts_printf_eterm_func = erts_printf_term;
     erts_disable_tolerant_timeofday = 0;
@@ -615,13 +620,11 @@ early_init(int *argc, char **argv) /*
 
     erts_use_sender_punish = 1;
 
-    erts_cpuinfo = erts_cpu_info_create();
-
-#ifdef ERTS_SMP
-    ncpu = erts_get_cpu_configured(erts_cpuinfo);
-    ncpuonln = erts_get_cpu_online(erts_cpuinfo);
-    ncpuavail = erts_get_cpu_available(erts_cpuinfo);
-#else
+    erts_pre_early_init_cpu_topology(&max_reader_groups,
+				     &ncpu,
+				     &ncpuonln,
+				     &ncpuavail);
+#ifndef ERTS_SMP
     ncpu = 1;
     ncpuonln = 1;
     ncpuavail = 1;
@@ -664,14 +667,8 @@ early_init(int *argc, char **argv) /*
 			    ? ncpuavail
 			    : (ncpuonln > 0 ? ncpuonln : no_schedulers));
 
-#ifdef ERTS_SMP
-    erts_max_main_threads = no_schedulers_online;
-#endif
-
     schdlrs = no_schedulers;
     schdlrs_onln = no_schedulers_online;
-
-    max_reader_groups = ERTS_MAX_READER_GROUPS;
 
     if (argc && argv) {
 	int i = 1;
@@ -768,9 +765,13 @@ early_init(int *argc, char **argv) /*
 
     erts_alloc_init(argc, argv, &alloc_opts); /* Handles (and removes)
 						 -M flags. */
-
-    erts_early_init_scheduling(); /* Require allocators */
-    erts_init_utils(); /* Require allocators */
+    /* Require allocators */
+    erts_early_init_scheduling();
+    erts_init_utils();
+    erts_early_init_cpu_topology(no_schedulers,
+				 &max_main_threads,
+				 max_reader_groups,
+				 &reader_groups);
 
 #ifdef USE_THREADS
     {
@@ -784,24 +785,13 @@ early_init(int *argc, char **argv) /*
 	elid.mem.ll.alloc = ethr_ll_alloc;
 	elid.mem.ll.realloc = ethr_ll_realloc;
 	elid.mem.ll.free = ethr_ll_free;
-
-#ifdef ERTS_SMP
-	elid.main_threads = erts_max_main_threads;
-#else
-	elid.main_threads = 1;
-#endif
-	elid.reader_groups = (elid.main_threads > 1
-			      ? elid.main_threads
-			      : 0);
-	if (max_reader_groups <= 1)
-	    elid.reader_groups = 0;
-	if (elid.reader_groups > max_reader_groups)
-	    elid.reader_groups = max_reader_groups;
-	erts_reader_groups = elid.reader_groups;
+	elid.main_threads = max_main_threads;
+	elid.reader_groups = reader_groups;
 
 	erts_thr_late_init(&elid);
     }
 #endif
+
 #ifdef ERTS_ENABLE_LOCK_CHECK
     erts_lc_late_init();
 #endif
@@ -818,7 +808,10 @@ early_init(int *argc, char **argv) /*
     erl_sys_args(argc, argv);
 
     erts_ets_realloc_always_moves = 0;
+    erts_ets_always_compress = 0;
+    erts_dist_buf_busy_limit = ERTS_DE_BUSY_LIMIT;
 
+    return ncpu;
 }
 
 #ifndef ERTS_SMP
@@ -852,8 +845,7 @@ erl_start(int argc, char **argv)
     char envbuf[21]; /* enough for any 64-bit integer */
     size_t envbufsz;
     int async_max_threads = erts_async_max_threads;
-
-    early_init(&argc, argv);
+    int ncpu = early_init(&argc, argv);
 
     envbufsz = sizeof(envbuf);
     if (erts_sys_getenv(ERL_MAX_ETS_TABLES_ENV, envbuf, &envbufsz) == 0)
@@ -916,7 +908,27 @@ erl_start(int argc, char **argv)
 	    VERBOSE(DEBUG_SYSTEM,
                     ("using display items %d\n",display_items));
 	    break;
-
+	case 'f':
+	    if (!strncmp(argv[i],"-fn",3)) {
+		arg = get_arg(argv[i]+3, argv[i+1], &i);
+		switch (*arg) {
+		case 'u':
+		    erts_set_user_requested_filename_encoding(ERL_FILENAME_UTF8);
+		    break;
+		case 'l':
+		    erts_set_user_requested_filename_encoding(ERL_FILENAME_LATIN1);
+		    break;
+		case 'a':
+		    erts_set_user_requested_filename_encoding(ERL_FILENAME_UNKNOWN);
+		default:
+		    erts_fprintf(stderr, "bad filename encoding %s, can be (l,u or a)\n", arg);
+		    erts_usage();
+		}
+		break;
+	    } else {
+		erts_fprintf(stderr, "%s unknown flag %s\n", argv[0], argv[i]);
+		erts_usage();
+	    }
 	case 'l':
 	    display_loads++;
 	    break;
@@ -1038,15 +1050,20 @@ erl_start(int argc, char **argv)
 	    break;
 
 	case 'e':
-	    /* set maximum number of ets tables */
-	    arg = get_arg(argv[i]+2, argv[i+1], &i);
-	    if (( user_requested_db_max_tabs = atoi(arg) ) < 0) {
-		erts_fprintf(stderr, "bad maximum number of ets tables %s\n", arg);
-		erts_usage();
+	    if (sys_strcmp("c", argv[i]+2) == 0) {
+		erts_ets_always_compress = 1;
 	    }
-	    VERBOSE(DEBUG_SYSTEM,
-                    ("using maximum number of ets tables %d\n",
-                     user_requested_db_max_tabs));
+	    else {
+		/* set maximum number of ets tables */
+		arg = get_arg(argv[i]+2, argv[i+1], &i);
+		if (( user_requested_db_max_tabs = atoi(arg) ) < 0) {
+		    erts_fprintf(stderr, "bad maximum number of ets tables %s\n", arg);
+		    erts_usage();
+		}
+		VERBOSE(DEBUG_SYSTEM,
+			("using maximum number of ets tables %d\n",
+			 user_requested_db_max_tabs));
+	    }
 	    break;
 
 	case 'i':
@@ -1110,7 +1127,7 @@ erl_start(int argc, char **argv)
 	    char *sub_param = argv[i]+2;
 	    if (has_prefix("bt", sub_param)) {
 		arg = get_arg(sub_param+2, argv[i+1], &i);
-		res = erts_init_scheduler_bind_type(arg);
+		res = erts_init_scheduler_bind_type_string(arg);
 		if (res != ERTS_INIT_SCHED_BIND_TYPE_SUCCESS) {
 		    switch (res) {
 		    case ERTS_INIT_SCHED_BIND_TYPE_NOT_SUPPORTED:
@@ -1135,7 +1152,7 @@ erl_start(int argc, char **argv)
 	    }
 	    else if (has_prefix("ct", sub_param)) {
 		arg = get_arg(sub_param+2, argv[i+1], &i);
-		res = erts_init_cpu_topology(arg);
+		res = erts_init_cpu_topology_string(arg);
 		if (res != ERTS_INIT_CPU_TOPOLOGY_OK) {
 		    switch (res) {
 		    case ERTS_INIT_CPU_TOPOLOGY_INVALID_ID:
@@ -1346,6 +1363,26 @@ erl_start(int argc, char **argv)
 	    }
 	    break;
 
+	case 'z': {
+	    char *sub_param = argv[i]+2;
+	    int new_limit;
+
+	    if (has_prefix("dbbl", sub_param)) {
+		arg = get_arg(sub_param+4, argv[i+1], &i);
+		new_limit = atoi(arg);
+		if (new_limit < 1 || INT_MAX/1024 < new_limit) {
+		    erts_fprintf(stderr, "Invalid dbbl limit: %d\n", new_limit);
+		    erts_usage();
+		} else {
+		    erts_dist_buf_busy_limit = new_limit*1024;
+		}
+	    } else {
+		erts_fprintf(stderr, "bad -z option %s\n", argv[i]);
+		erts_usage();
+	    }
+	    break;
+        }
+
 	default:
 	    erts_fprintf(stderr, "%s unknown flag %s\n", argv[0], argv[i]);
 	    erts_usage();
@@ -1386,7 +1423,7 @@ erl_start(int argc, char **argv)
     boot_argc = argc - i;  /* Number of arguments to init */
     boot_argv = &argv[i];
 
-    erl_init();
+    erl_init(ncpu);
 
     init_shared_memory(boot_argc, boot_argv);
     load_preloaded();

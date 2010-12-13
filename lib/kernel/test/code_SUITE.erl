@@ -19,7 +19,7 @@
 -module(code_SUITE).
 
 -include("test_server.hrl").
-
+%-compile(export_all).
 -export([all/1]).
 -export([set_path/1, get_path/1, add_path/1, add_paths/1, del_path/1,
 	 replace_path/1, load_file/1, load_abs/1, ensure_loaded/1,
@@ -31,6 +31,7 @@
 	 where_is_file_cached/1, where_is_file_no_cache/1,
 	 purge_stacktrace/1, mult_lib_roots/1, bad_erl_libs/1,
 	 code_archive/1, code_archive2/1, on_load/1,
+	 big_boot_embedded/1,
 	 on_load_embedded/1, on_load_errors/1, native_early_modules/1]).
 
 -export([init_per_testcase/2, fin_per_testcase/2, 
@@ -53,6 +54,7 @@ all(suite) ->
      where_is_file_no_cache, where_is_file_cached,
      purge_stacktrace, mult_lib_roots, bad_erl_libs,
      code_archive, code_archive2, on_load, on_load_embedded,
+     big_boot_embedded,
      on_load_errors, native_early_modules].
 
 init_per_suite(Config) ->
@@ -584,13 +586,21 @@ clash(Config) when is_list(Config) ->
     TmpEzFile = Priv++"foobar-0.tmp.ez",
     ?line {ok, _} = file:copy(DDir++"foobar-0.1.ez", TmpEzFile),
     ?line true = code:add_path(TmpEzFile++"/foobar-0.1/ebin"),
-    ?line ok = file:delete(TmpEzFile),
+    case os:type() of
+        {win32,_} ->
+	    %% The file wont be deleted on windows until it's closed, why we 
+	    %% need to rename instead.
+	    ?line ok = file:rename(TmpEzFile,TmpEzFile++".moved");
+	 _ ->
+    	    ?line ok = file:delete(TmpEzFile)
+    end,
     test_server:capture_start(),
     ?line ok = code:clash(),
     test_server:capture_stop(),
     ?line [BadPathMsg|_] = test_server:capture_get(),
     ?line true = lists:prefix("** Bad path can't read", BadPathMsg),
     ?line true = code:set_path(P),
+    file:delete(TmpEzFile++".moved"), %% Only effect on windows
     ok.
 
 ext_mod_dep(suite) ->
@@ -635,7 +645,7 @@ analyse([], [This={M,F,A}|Path], Visited, ErrCnt0) ->
     %% These modules should be loaded by code.erl before 
     %% the code_server is started.
     OK = [erlang, os, prim_file, erl_prim_loader, init, ets,
-	  code_server, lists, lists_sort, filename, packages, 
+	  code_server, lists, lists_sort, unicode, binary, filename, packages, 
 	  gb_sets, gb_trees, hipe_unified_loader, hipe_bifs,
 	  prim_zip, zlib],
     ErrCnt1 = 
@@ -663,6 +673,22 @@ analyse2(MFA={_,_,_}, Path, Visited0) ->
 
 %%%% We need to check these manually...
 % fun's are ok as long as they are defined locally.
+check_funs({'$M_EXPR','$F_EXPR',_},
+	   [{unicode,characters_to_binary_int,3},
+	    {unicode,characters_to_binary,3},
+	    {filename,filename_string_to_binary,1}|_]) -> 0;
+check_funs({'$M_EXPR','$F_EXPR',_},
+	   [{unicode,ml_map,3},
+	    {unicode,characters_to_binary_int,3},
+	    {unicode,characters_to_binary,3},
+	    {filename,filename_string_to_binary,1}|_]) -> 0;
+check_funs({'$M_EXPR','$F_EXPR',_},
+	   [{unicode,do_o_binary2,2},
+	    {unicode,do_o_binary,2},
+	    {unicode,o_trans,1},
+	    {unicode,characters_to_binary_int,3},
+	    {unicode,characters_to_binary,3},
+	    {filename,filename_string_to_binary,1}|_]) -> 0;
 check_funs({'$M_EXPR','$F_EXPR',_},
 	   [{code_server,load_native_code,4},
 	    {code_server,load_native_code_1,2},
@@ -1145,6 +1171,22 @@ compile_files([File | Files], SrcDir, OutDir) ->
 compile_files([], _, _) ->
     ok.
 
+big_boot_embedded(suite) ->
+    [];
+big_boot_embedded(doc) ->
+    ["Test that a boot file with (almost) all of OTP can be used to start an"
+     " embeddedd system."];
+big_boot_embedded(Config) when is_list(Config) ->
+    ?line {BootArg,AppsInBoot} = create_big_boot(Config),
+    ?line {ok, Node} = 
+	?t:start_node(big_boot_embedded, slave,
+		      [{args,"-boot "++BootArg++" -mode embedded"}]),
+    ?line RemoteNodeApps = 
+	[ {X,Y} || {X,_,Y} <- 
+		       rpc:call(Node,application,loaded_applications,[]) ],
+    ?line true = lists:sort(AppsInBoot) =:=  lists:sort(RemoteNodeApps),
+    ok.
+
 on_load(Config) when is_list(Config) ->
     Master = on_load_test_case_process,
 
@@ -1226,7 +1268,8 @@ on_load_embedded_1(Config) ->
     ?line LibRoot = code:lib_dir(),
     ?line LinkName = filename:join(LibRoot, "on_load_app-1.0"),
     ?line OnLoadApp = filename:join(DataDir, "on_load_app-1.0"),
-    ?line file:delete(LinkName),
+    ?line del_link(LinkName),
+    io:format("LinkName :~p, OnLoadApp: ~p~n",[LinkName,OnLoadApp]),
     case file:make_symlink(OnLoadApp, LinkName) of
 	{error,enotsup} ->
 	    throw({skip,"Support for symlinks required"});
@@ -1255,7 +1298,15 @@ on_load_embedded_1(Config) ->
 
     %% Clean up.
     ?line stop_node(Node),
-    ?line ok = file:delete(LinkName).
+    ?line ok = del_link(LinkName).
+
+del_link(LinkName) ->
+   case file:delete(LinkName) of
+       {error,eperm} ->
+             file:del_dir(LinkName);
+       Other ->
+       	     Other
+   end.			   
 
 create_boot(Config, Options) ->
     ?line {ok, OldDir} = file:get_cwd(),
@@ -1280,6 +1331,73 @@ create_script(Config) ->
 		    [KernelVer,StdlibVer]),
     ?line file:close(Fd),
     {filename:dirname(Name),filename:basename(Name)}.
+
+create_big_boot(Config) ->
+    ?line {ok, OldDir} = file:get_cwd(),
+    ?line {Options,Local} = case is_source_dir() of 
+				true -> {[no_module_tests,local],true}; 
+				_ -> {[no_module_tests],false} 
+			    end,
+    ?line {LatestDir,LatestName,Apps} = create_big_script(Config,Local),
+    ?line ok = file:set_cwd(LatestDir),
+    ?line ok = systools:make_script(LatestName, Options),
+    ?line ok = file:set_cwd(OldDir),
+    {filename:join(LatestDir, LatestName),Apps}.
+
+% The following apps cannot be loaded 
+% hipe .app references (or can reference) files that have no
+% corresponding beam file (if hipe is not enabled)
+filter_app("hipe",_) ->
+    false;
+% Dialyzer and typer depends on hipe
+filter_app("dialyzer",_) ->
+    false;
+filter_app("typer",_) ->
+    false;
+% Orber requires explicit configuration
+filter_app("orber",_) ->
+    false;
+% cos* depends on orber
+filter_app("cos"++_,_) ->
+    false;
+% ic has a mod instruction in the app file but no corresponding start function
+filter_app("ic",_) ->
+    false;
+% Netconf has some dependency that I really do not understand (maybe like orber)
+filter_app("netconf",_) ->
+    false;
+% Safe has the same kind of error in the .app file as ic
+filter_app("safe",_) ->
+    false;
+% OS_mon does not find it's port program when running cerl
+filter_app("os_mon",true) ->
+    false;
+% Other apps should be OK.
+filter_app(_,_) ->
+    true.
+create_big_script(Config,Local) ->
+    ?line PrivDir = ?config(priv_dir, Config),
+    ?line Name = filename:join(PrivDir,"full_script_test"),
+    ?line InitialApplications=application:loaded_applications(),
+    %% Applications left loaded by the application suite, unload them!
+    ?line UnloadFix=[app0,app1,app2,group_leader,app_start_error],
+    ?line [application:unload(Leftover) || 
+	      Leftover <- UnloadFix,
+	      lists:keymember(Leftover,1,InitialApplications) ],
+    %% Now we should have only "real" applications...
+    ?line [application:load(list_to_atom(Y)) || {match,[Y]} <- [ re:run(X,code:lib_dir()++"/"++"([^/-]*).*/ebin",[{capture,[1],list}]) || X <- code:get_path()],filter_app(Y,Local)],
+    ?line Apps = [ {N,V} || {N,_,V} <- application:loaded_applications()],
+    ?line {ok,Fd} = file:open(Name ++ ".rel", write),
+    ?line io:format(Fd,
+		    "{release, {\"Test release 3\", \"P2A\"}, \n"
+		    " {erts, \"9.42\"}, \n"
+		    " ~p}.\n",
+		    [Apps]),
+    ?line file:close(Fd),
+    ?line NewlyLoaded = 
+	application:loaded_applications() -- InitialApplications,
+    ?line [ application:unload(N) || {N,_,_} <- NewlyLoaded],
+    {filename:dirname(Name),filename:basename(Name),Apps}.
 
 is_source_dir() ->
     filename:basename(code:lib_dir(kernel)) =:= "kernel" andalso
