@@ -997,7 +997,6 @@ static int open_pty_slave(char *name)
     return -1;
   }
 
-
 #if defined(__sun) && defined(__SVR4)
   /* Load the necessary STREAMS modules for Solaris */
   if ((ioctl(sfd, I_FIND, "ldterm")) < 0) {
