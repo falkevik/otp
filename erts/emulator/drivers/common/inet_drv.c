@@ -1371,6 +1371,8 @@ static struct erl_drv_entry udp_inet_driver_entry =
 #endif
 
 #ifdef HAVE_SCTP
+static void sctp_inet_flush(ErlDrvData e);
+
 static struct erl_drv_entry sctp_inet_driver_entry = 
 {
     packet_inet_init,  /* inet_init will add this driver !! */
@@ -1391,7 +1393,7 @@ static struct erl_drv_entry sctp_inet_driver_entry =
     packet_inet_timeout,
     NULL,
     NULL,
-    NULL,
+    sctp_inet_flush,
     NULL,
     NULL,
     ERL_DRV_EXTENDED_MARKER,
@@ -1403,6 +1405,7 @@ static struct erl_drv_entry sctp_inet_driver_entry =
     inet_stop_select,
     inet_emergency_close
 };
+
 #endif
 
 typedef struct {
@@ -1442,11 +1445,22 @@ typedef struct {
     int i_bufsz;            /* current input buffer size */
     ErlDrvBinary* i_buf;    /* current binary buffer */
     char* i_ptr;            /* current pos in buf */
+    char*         i_ptr_start;  /* packet start pos in buf */
+    int           i_remain;     /* remaining chars to read */
+    int   high;                 /* high watermark */
+    int   low;                  /* low watermark */
+    int   send_timeout;         /* timeout to use in send */
+    int   send_timeout_close;   /* auto-close socket on send_timeout */
+    int   busy_on_send;         /* busy on send with timeout! */
+
 } udp_descriptor;
 
 
 static int packet_inet_input(udp_descriptor* udesc, HANDLE event);
 static int packet_inet_output(udp_descriptor* udesc, HANDLE event);
+#endif
+#ifdef HAVE_SCTP
+static int inet_sctp_send(udp_descriptor *udesc, char* buf, ErlDrvSizeT len);
 #endif
 
 /* convert descriptor pointer to inet_descriptor pointer */
@@ -9046,6 +9060,30 @@ static void tcp_restart_input(tcp_descriptor* desc)
     }
 }
 
+#ifdef HAVE_SCTP
+/* clear CURRENT input buffer */
+static void udp_clear_input(udp_descriptor* desc)
+{
+    if (desc->i_buf != NULL)
+	free_buffer(desc->i_buf);
+    desc->i_buf = NULL;
+    desc->i_remain    = 0;
+    desc->i_ptr       = NULL;
+    desc->i_ptr_start = NULL;
+    desc->i_bufsz     = 0;
+}
+
+/* clear QUEUED output */
+static void sctp_clear_output(udp_descriptor* desc)
+{
+    ErlDrvPort ix  = desc->inet.port;
+    ErlDrvSizeT qsz = driver_sizeq(ix);
+    driver_deq(ix, qsz);
+    desc->inet.state &= ~INET_F_BUSY;
+    send_empty_out_q_msgs(INETP(desc));
+}
+
+#endif
 
 static int tcp_inet_init(void)
 {
@@ -9720,6 +9758,14 @@ static void tcp_inet_flush(ErlDrvData e)
     if (desc->tcp_add_flags & TCP_ADDF_LINGER_ZERO)
 	tcp_clear_output(desc);
 }
+
+#ifdef HAVE_SCTP
+static void sctp_inet_flush(ErlDrvData e)
+{
+    udp_descriptor* desc = (udp_descriptor*)e;
+    sctp_clear_output(desc);
+}
+#endif
 
 static void tcp_inet_process_exit(ErlDrvData e, ErlDrvMonitor *monitorp) 
 {
@@ -10729,6 +10775,49 @@ static int tcp_shutdown_error(tcp_descriptor* desc, int err)
     return tcp_send_or_shutdown_error(desc, err);
 }
 
+#ifdef HAVE_SCTP
+static int sctp_send_error(udp_descriptor* udesc, int err)
+{
+    /* don't close one-to-many SCTP sockets */
+    if (udesc->inet.stype != SOCK_STREAM) {
+	inet_reply_error(INETP(udesc), err);
+	return -1;
+    }
+
+    /*
+     * If the port is busy, we must do some clean-up before proceeding.
+     */
+    if (IS_BUSY(INETP(udesc))) {
+	udesc->inet.caller = udesc->inet.busy_caller;
+	if (udesc->busy_on_send) {
+	    driver_cancel_timer(udesc->inet.port);
+	    udesc->busy_on_send = 0;
+	}
+	udesc->inet.state &= ~INET_F_BUSY;
+	set_busy_port(udesc->inet.port, 0);
+    }
+
+    DEBUGF(("driver_failure_eof(%ld) in %s, line %d\r\n",
+	    (long)udesc->inet.port, __FILE__, __LINE__));
+    if (udesc->inet.active) {
+	inet_reply_error_am(INETP(udesc), am_closed);
+	if (udesc->inet.exitf)
+	    driver_exit(udesc->inet.port, 0);
+	else
+	    desc_close(INETP(udesc));
+    } else {
+	sctp_clear_output(udesc);
+	udp_clear_input(udesc);
+	erl_inet_close(INETP(udesc));
+
+	if (udesc->inet.caller) {
+	    inet_reply_error_am(INETP(udesc), am_closed);
+	}
+    }
+    return -1;
+}
+#endif
+
 /*
 ** Send non-blocking vector data
 */
@@ -10828,6 +10917,58 @@ static int tcp_sendv(tcp_descriptor* desc, ErlIOVec* ev)
     }
     return 0;
 }
+
+#ifdef HAVE_SCTP
+/*
+** Send non blocking data
+*/
+static int sctp_buf_sendmsg(udp_descriptor* udesc, char* ptr, ErlDrvSizeT len)
+{
+    int sz;
+    int n;
+    ErlDrvPort ix = udesc->inet.port;
+
+    if ((sz = driver_sizeq(ix)) > 0) {
+	driver_enq(ix, ptr, len);
+	if (sz+len >= udesc->high) {
+	    DEBUGF(("sctp_buf_sendmsg(%ld): s=%d, sender forced busy\r\n",
+		    (long)udesc->inet.port, udesc->inet.s));
+	    udesc->inet.state |= INET_F_BUSY;  /* mark for low-watermark */
+	    udesc->inet.busy_caller = udesc->inet.caller;
+	    set_busy_port(udesc->inet.port, 1);
+	    if (udesc->send_timeout != INET_INFINITY) {
+		udesc->busy_on_send = 1;
+		driver_set_timer(udesc->inet.port, udesc->send_timeout);
+	    }
+	    return 1;
+	}
+    }
+    else {
+	DEBUGF(("stcp_buf_sendmsg(%ld): s=%d, about to send "LLU" bytes\r\n",
+		(long)udesc->inet.port, udesc->inet.s, len));
+
+	if (INETP(udesc)->is_ignored) {
+	    INETP(udesc)->is_ignored |= INET_IGNORE_WRITE;
+	    n = 0;
+	} else if (IS_SOCKET_ERROR(n = inet_sctp_send(udesc,ptr,len))) {
+	    if ((sock_errno() != ERRNO_BLOCK) && (sock_errno() != EINTR)) {
+		int err = sock_errno();
+		DEBUGF(("inet_sctp_send(%ld): s=%d, errno = %d\r\n",
+			(long)udesc->inet.port, udesc->inet.s, err));
+		return sctp_send_error(udesc, err);
+	    }
+
+	    DEBUGF(("inet_sctp_send(%ld): s=%d, Send failed, queuing\r\n",
+		(long)udesc->inet.port, udesc->inet.s));
+	    driver_enq(ix, ptr, len);
+	    if (!INETP(udesc)->is_ignored)
+		sock_select(INETP(udesc),(FD_WRITE|FD_CLOSE), 1);
+	}
+    }
+    return 0;
+}
+
+#endif
 
 /*
 ** Send non blocking data
@@ -11211,15 +11352,20 @@ static udp_descriptor* sctp_inet_copy(udp_descriptor* desc, SOCKET s, int* err)
     }
 
     /* Some flags must be inherited at this point */
-    copy_desc->inet.mode     = desc->inet.mode;
-    copy_desc->inet.exitf    = desc->inet.exitf;
-    copy_desc->inet.deliver  = desc->inet.deliver;
-    copy_desc->inet.htype    = desc->inet.htype;
-    copy_desc->inet.psize    = desc->inet.psize;
-    copy_desc->inet.stype    = desc->inet.stype;
-    copy_desc->inet.sfamily  = desc->inet.sfamily;
-    copy_desc->inet.hsz      = desc->inet.hsz;
-    copy_desc->inet.bufsz    = desc->inet.bufsz;
+    copy_desc->send_timeout_close = desc->send_timeout_close;
+    copy_desc->send_timeout	  = desc->send_timeout;
+    copy_desc->busy_on_send	  = desc->busy_on_send;
+    copy_desc->low		  = desc->low;
+    copy_desc->high		  = desc->high;
+    copy_desc->inet.mode	  = desc->inet.mode;
+    copy_desc->inet.exitf	  = desc->inet.exitf;
+    copy_desc->inet.deliver	  = desc->inet.deliver;
+    copy_desc->inet.htype	  = desc->inet.htype;
+    copy_desc->inet.psize	  = desc->inet.psize;
+    copy_desc->inet.stype	  = desc->inet.stype;
+    copy_desc->inet.sfamily	  = desc->inet.sfamily;
+    copy_desc->inet.hsz		  = desc->inet.hsz;
+    copy_desc->inet.bufsz	  = desc->inet.bufsz;
 
     /* The new port will be linked and connected to the caller */
     port = driver_create_port(port, desc->inet.caller, "sctp_inet",
@@ -11266,6 +11412,11 @@ static ErlDrvData packet_inet_start(ErlDrvPort port, char* args, int protocol)
 
     desc->read_packets = INET_PACKET_POLL;
     desc->i_bufsz = 0;
+    desc->high = INET_HIGH_WATERMARK;
+    desc->low  = INET_LOW_WATERMARK;
+    desc->send_timeout = INET_INFINITY;
+    desc->send_timeout_close = 0;
+    desc->busy_on_send = 0;
     desc->i_buf = NULL;
     desc->i_ptr = NULL;
     return drvd;
@@ -11298,6 +11449,8 @@ static void packet_inet_stop(ErlDrvData e)
     */
     udp_descriptor * udesc = (udp_descriptor*) e;
     inet_descriptor* descr = INETP(udesc);
+    DEBUGF(("packet_inet_stop(%ld) {s=%d\r\n",
+	    (long)udesc->inet.port, udesc->inet.s));
     if (udesc->i_buf != NULL) {
 	release_buffer(udesc->i_buf);
 	udesc->i_buf = NULL;
@@ -11694,6 +11847,55 @@ static void packet_inet_timeout(ErlDrvData e)
     async_error_am (desc, am_timeout);
 }
 
+#ifdef HAVE_SCTP
+int inet_sctp_send(udp_descriptor *udesc, char* buf, ErlDrvSizeT len)
+{
+    inet_descriptor* desc = INETP(udesc);
+    char* ptr		  = buf;
+    int code;
+
+    ErlDrvSizeT   data_len;
+    struct iovec  iov[1];		 /* For real data            */
+    struct msghdr mhdr;		 /* Message wrapper          */
+    struct sctp_sndrcvinfo *sri;     /* The actual ancilary data */
+    union {                          /* For ancilary data        */
+	struct cmsghdr hdr;
+	char ancd[CMSG_SPACE(sizeof(*sri))];
+    } cmsg;
+
+    /* The ancilary data */
+    sri = (struct sctp_sndrcvinfo *) (CMSG_DATA(&cmsg.hdr));
+    /* Get the "sndrcvinfo" from the buffer, advancing the "ptr": */
+    ptr  = sctp_get_sendparams(sri, ptr);
+
+    /* The ancilary data wrapper */
+    cmsg.hdr.cmsg_level = IPPROTO_SCTP;
+    cmsg.hdr.cmsg_type  = SCTP_SNDRCV;
+    cmsg.hdr.cmsg_len   = CMSG_LEN(sizeof(*sri));
+
+    data_len = (buf + len) - ptr;
+    /* The whole msg.
+     * Solaris (XPG 4.2) requires iovlen >= 1 even for data_len == 0.
+     */
+    mhdr.msg_name           = NULL;	        /* Already connected  */
+    mhdr.msg_namelen        = 0;
+    iov[0].iov_len          = data_len;
+    iov[0].iov_base         = ptr;          /* The real data */
+    mhdr.msg_iov            = iov;
+    mhdr.msg_iovlen         = 1;
+    mhdr.msg_control        = cmsg.ancd;    /* For ancilary data  */
+    mhdr.msg_controllen     = cmsg.hdr.cmsg_len;
+    VALGRIND_MAKE_MEM_DEFINED(mhdr.msg_control, mhdr.msg_controllen); /*suppress "uninitialised bytes"*/
+    mhdr.msg_flags          = 0;            /* Not used with "sendmsg"   */
+
+    /* Now do the actual sending. NB: "flags" in "sendmsg" itself are NOT
+       used: */
+    /* Use send buffers ala TCP implementation if socket is STREAM */
+    code = sock_sendmsg(desc->s, &mhdr, 0);
+
+    return code;
+}
+#endif /* HAVE_SCTP */
 
 /* THIS IS A "send*" REQUEST; on the Erlang side: "port_command".
 ** input should be: P1 P0 Address buffer .
@@ -11728,49 +11930,14 @@ static void packet_inet_command(ErlDrvData e, char* buf, ErlDrvSizeT len)
 #ifdef HAVE_SCTP
     if (IS_SCTP(desc))
     {
-	ErlDrvSizeT   data_len;
-	struct iovec  iov[1];		 /* For real data            */
-	struct msghdr mhdr;		 /* Message wrapper          */
-	struct sctp_sndrcvinfo *sri;     /* The actual ancilary data */
-	union {                          /* For ancilary data        */
-	    struct cmsghdr hdr;
-	    char ancd[CMSG_SPACE(sizeof(*sri))];
-	} cmsg;
-	
 	if (len < SCTP_GET_SENDPARAMS_LEN) {
 	    inet_reply_error(desc, EINVAL);
 	    return;
 	}
 	
-	/* The ancilary data */
-	sri = (struct sctp_sndrcvinfo *) (CMSG_DATA(&cmsg.hdr));
-	/* Get the "sndrcvinfo" from the buffer, advancing the "ptr": */
-	ptr  = sctp_get_sendparams(sri, ptr);
-	
-	/* The ancilary data wrapper */
-	cmsg.hdr.cmsg_level = IPPROTO_SCTP;
-	cmsg.hdr.cmsg_type  = SCTP_SNDRCV;
-	cmsg.hdr.cmsg_len   = CMSG_LEN(sizeof(*sri));
-	
-	data_len = (buf + len) - ptr;
-	/* The whole msg. 
-	 * Solaris (XPG 4.2) requires iovlen >= 1 even for data_len == 0.
-	 */
-	mhdr.msg_name           = NULL;	        /* Already connected  */
-	mhdr.msg_namelen        = 0;
-	iov[0].iov_len          = data_len;
-	iov[0].iov_base         = ptr;          /* The real data */
-	mhdr.msg_iov            = iov;
-	mhdr.msg_iovlen         = 1;
-	mhdr.msg_control        = cmsg.ancd;    /* For ancilary data  */
-	mhdr.msg_controllen     = cmsg.hdr.cmsg_len;
-	VALGRIND_MAKE_MEM_DEFINED(mhdr.msg_control, mhdr.msg_controllen); /*suppress "uninitialised bytes"*/
-	mhdr.msg_flags          = 0;            /* Not used with "sendmsg"   */
-	
-	/* Now do the actual sending. NB: "flags" in "sendmsg" itself are NOT
-	   used: */
-	code = sock_sendmsg(desc->s, &mhdr, 0);
-	goto check_result_code;
+	if (sctp_buf_sendmsg(udesc, buf, len) == 0)
+	    inet_reply_ok(desc);
+	return;
     }
 #endif
     /* UDP socket. Even if it is connected, there is an address prefix
@@ -11793,10 +11960,6 @@ static void packet_inet_command(ErlDrvData e, char* buf, ErlDrvSizeT len)
 	code = sock_sendto(desc->s, ptr, len, 0, &other.sa, sz);
     }
 
-#ifdef HAVE_SCTP    
- check_result_code:
-    /* "code" analysis is the same for both SCTP and UDP cases above: */
-#endif
     if (IS_SOCKET_ERROR(code)) {
 	int err = sock_errno();
 	inet_reply_error(desc, err);
@@ -12073,6 +12236,44 @@ static int packet_inet_output(udp_descriptor* udesc, HANDLE event)
 	desc->state = INET_STATE_CONNECTED;
 	async_ok(desc);
     }
+#ifdef HAVE_SCTP
+    else if (IS_CONNECTED(desc) && IS_SCTP(desc)) {
+	for (;;) {
+	    int vsize;
+	    SysIOVec* iov;
+
+	    if ((iov = driver_peekq(ix, &vsize)) == NULL) {
+		sock_select(INETP(udesc), FD_WRITE, 0);
+		send_empty_out_q_msgs(INETP(udesc));
+		goto done;
+	    }
+	    vsize = vsize > MAX_VSIZE ? MAX_VSIZE : vsize;
+	    DEBUGF(("sctp_inet_output(%ld): s=%d, About to send %d items\r\n",
+		    (long)udesc->inet.port, udesc->inet.s, vsize));
+	    if (IS_SOCKET_ERROR(inet_sctp_send(udesc, iov->iov_base, iov->iov_len))) {
+		if ((sock_errno() != ERRNO_BLOCK) && (sock_errno() != EINTR)) {
+		    DEBUGF(("sctp_inet_output(%ld): sock_sendv(%d) errno = %d (errno %d)\r\n",
+			    (long)udesc->inet.port, vsize, sock_errno(), errno));
+		    ret =  sctp_send_error(udesc, sock_errno());
+		}
+		goto done;
+	    }
+	    if (driver_deq(ix, iov->iov_len) <= udesc->low) {
+		if (IS_BUSY(INETP(udesc))) {
+		    udesc->inet.caller = udesc->inet.busy_caller;
+		    udesc->inet.state &= ~INET_F_BUSY;
+		    set_busy_port(udesc->inet.port, 0);
+		    /* if we have a timer then cancel and send ok to client */
+		    if (udesc->busy_on_send) {
+			driver_cancel_timer(udesc->inet.port);
+			udesc->busy_on_send = 0;
+		    }
+		    inet_reply_ok(INETP(udesc));
+		}
+	    }
+	}
+    }
+#endif /* HAVE_SCTP */
     else {
 	sock_select(desc,FD_CONNECT,0);
 
