@@ -1449,8 +1449,8 @@ typedef struct {
     int           i_remain;     /* remaining chars to read */
     int   high;                 /* high watermark */
     int   low;                  /* low watermark */
-    int   send_timeout;         /* timeout to use in send */
-    int   send_timeout_close;   /* auto-close socket on send_timeout */
+    int   send_timeout;         /* timeout to use in send  (not used yet) */
+    int   send_timeout_close;   /* auto-close socket on send_timeout (not used yet) */
     int   busy_on_send;         /* busy on send with timeout! */
 
 } udp_descriptor;
