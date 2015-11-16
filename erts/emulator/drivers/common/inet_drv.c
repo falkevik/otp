@@ -9062,7 +9062,7 @@ static void tcp_restart_input(tcp_descriptor* desc)
 
 #ifdef HAVE_SCTP
 /* clear CURRENT input buffer */
-static void udp_clear_input(udp_descriptor* desc)
+static void sctp_clear_input(udp_descriptor* desc)
 {
     if (desc->i_buf != NULL)
 	free_buffer(desc->i_buf);
@@ -10807,7 +10807,7 @@ static int sctp_send_error(udp_descriptor* udesc, int err)
 	    desc_close(INETP(udesc));
     } else {
 	sctp_clear_output(udesc);
-	udp_clear_input(udesc);
+	sctp_clear_input(udesc);
 	erl_inet_close(INETP(udesc));
 
 	if (udesc->inet.caller) {
