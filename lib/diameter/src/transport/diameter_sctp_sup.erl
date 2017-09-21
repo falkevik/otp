@@ -32,6 +32,7 @@
 
 %% Start multiple supervisors only because a child can't start another
 %% child before supervisor:start_child/2 has returned.
+-define(TRANSSOCK_SUP, diameter_sctp_transsock_sup).
 -define(TRANSPORT_SUP, diameter_sctp_transport_sup).
 -define(LISTENER_SUP,  diameter_sctp_listener_sup).
 
@@ -40,6 +41,7 @@
 %% Start the TCP-specific supervisors.
 
 start() ->
+    diameter_transport_sup:start_child(?TRANSSOCK_SUP, ?MODULE),
     diameter_transport_sup:start_child(?TRANSPORT_SUP, ?MODULE),
     diameter_transport_sup:start_child(?LISTENER_SUP,  ?MODULE).
 
@@ -48,13 +50,15 @@ start() ->
 %% Start a worker under one of the child supervisors.
 
 start_child(T) ->
-    SupRef = case element(1,T) of
-                 monitor   -> ?TRANSPORT_SUP;
-                 connect   -> ?TRANSPORT_SUP;
-                 accept    -> ?TRANSPORT_SUP;
-                 listen    -> ?LISTENER_SUP
+    {SupRef, Args}
+	    = case element(1,T) of
+                 open      -> {?TRANSSOCK_SUP, diameter_sctp:open_child_spec(T)};
+                 monitor   -> {?TRANSPORT_SUP, [T]};
+                 connect   -> {?TRANSPORT_SUP, [T]};
+                 accept    -> {?TRANSPORT_SUP, [T]};
+                 listen    -> {?LISTENER_SUP, [T]}
              end,
-    supervisor:start_child(SupRef, [T]).
+    supervisor:start_child(SupRef, Args).
 
 %% start_link/1
 %%
@@ -62,9 +66,14 @@ start_child(T) ->
 %% Starts a child supervisor under the transport supervisor.
 
 start_link(Name) ->
-    supervisor:start_link({local, Name}, ?MODULE, []).
+    supervisor:start_link({local, Name}, ?MODULE, [Name]).
 
-init([]) ->
+
+init([?TRANSSOCK_SUP]) ->
+    Flags = {one_for_one, 0, 1},
+    {ok, {Flags, []}};
+
+init([_]) ->
     Mod = diameter_sctp,
     Flags = {simple_one_for_one, 0, 1},
     ChildSpec = {Mod,

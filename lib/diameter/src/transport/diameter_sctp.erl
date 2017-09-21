@@ -27,6 +27,9 @@
 %% child start from supervisor
 -export([start_link/1]).
 
+%% get child spec for port holding process
+-export([open_child_spec/1]).
+
 %% child start from here
 -export([init/1]).
 
@@ -91,12 +94,13 @@
                | {connect, {[inet:ip_address()], uint(), list()}}
                         %% {RAs, RP, Errors}
                | connect,
-         socket   :: gen_sctp:sctp_socket() | undefined,
+         osocket  :: gen_sctp:sctp_socket() | undefined,
+	 init_opts :: list(),
+	 socket   :: gen_sctp:sctp_socket() | undefined,
          active = false :: boolean(),      %% is socket active?
          recv = true    :: boolean(),      %% should it be active?
          assoc_id :: gen_sctp:assoc_id()   %% association identifier
-                   | undefined
-                   | true,
+                   | undefined,
          peer     :: {[inet:ip_address()], uint()} %% {RAs, RP}
                    | undefined,
          streams  :: {uint(), uint()}      %% {InStream, OutStream} counts
@@ -109,6 +113,15 @@
                         | raw,
          message_cb = false :: false | diameter:eval(),
          send = false :: pid() | boolean()}).      %% sending process
+
+%% Monitor process state.
+-record(open,
+        {id :: term(),
+	 opts :: list(),
+         socket :: gen_sctp:sctp_socket(),
+         references :: map(),
+         connects :: map(),
+         listener :: pid()}).
 
 %% Monitor process state.
 -record(monitor,
@@ -124,6 +137,15 @@
          service   :: pid(), %% service process
          pending = {0, queue:new()},
          opts      :: [[match()] | boolean() | diameter:eval()]}).
+
+open_child_spec(#open{id = Id} = T) ->
+    #{id => Id,
+      start => {diameter_sctp, start_link, [T]},
+      restart => temporary,
+      shutdown => 1000,
+      type => worker,
+      modules => [diameter_sctp]}.
+
 %% Field pending implements two queues: the first of transport-to-be
 %% processes to which an association has been assigned but for which
 %% diameter hasn't yet spawned a transport process, a short-lived
@@ -234,6 +256,10 @@ init(T) ->
 
 %% i/1
 
+i(#open{opts = Opts} = S) ->
+    {ok, Socket} = gen_sctp:open(Opts),
+    proc_lib:init_ack({ok, self()}),
+    S#open{socket = Socket};
 i(#monitor{transport = TPid} = S) ->
     monitor(process, TPid),
     putr(?TRANSPORT_KEY, TPid),
@@ -251,7 +277,7 @@ i({listen, Ref, {Opts, SvcPid, Addrs}}) ->
                                            unordered]),
     OwnOpts = lists:append(Split),
     {LAs, Sock} = AS = open(Addrs, Rest, ?DEFAULT_PORT),
-    ok = gen_sctp:listen(Sock, true),
+    ok = do_listen(Sock, true),
     true = diameter_reg:add_new({?MODULE, listener, {Ref, AS}}),
     proc_lib:init_ack({ok, self(), LAs}),
     #listener{ref = Ref,
@@ -262,14 +288,18 @@ i({listen, Ref, {Opts, SvcPid, Addrs}}) ->
                       | [proplists:get_value(K, OwnOpts, false)
                          || K <- [sender, message_cb, unordered]]]};
 
+
 %% A connecting transport.
 i({connect, Pid, Opts, Addrs, Ref}) ->
-    {[Ps | Split], Rest} = proplists:split(Opts, [rport,
-                                                  raddr,
-                                                  packet,
-                                                  sender,
-                                                  message_cb,
-                                                  unordered]),
+    {[InitMsg, Ps | Split], Rest}
+	= proplists:split(Opts, [sctp_initmsg,
+                                 rport,
+                                 raddr,
+                                 packet,
+                                 sender,
+                                 message_cb,
+                                 unordered]),
+    InitOpts = lists:append([InitMsg]),
     OwnOpts = lists:append(Split),
     CB = proplists:get_value(message_cb, OwnOpts, false),
     false == CB orelse (Pid ! {diameter, ack}),
@@ -280,9 +310,10 @@ i({connect, Pid, Opts, Addrs, Ref}) ->
     proc_lib:init_ack({ok, self(), LAs}),
     monitor(process, Pid),
     #transport{parent = Pid,
-               mode = {connect, connect(Sock, RAs, RP, [])},
-               socket = Sock,
-               message_cb = CB,
+               mode = {connect, connect(Sock, RAs, RP, InitOpts, [])},
+               osocket = Sock,
+               init_opts = InitOpts,
+	       message_cb = CB,
                unordered = proplists:get_value(ordered, OwnOpts, false),
                packet = proplists:get_value(packet, OwnOpts, true),
                send = proplists:get_value(sender, OwnOpts, false)};
@@ -361,12 +392,40 @@ l([], Ref, T) ->
 %% open/3
 
 open(Addrs, Opts, PortNr) ->
-    case gen_sctp:open(gen_opts(portnr(addrs(Addrs, Opts), PortNr))) of
-        {ok, Sock} ->
-            {addrs(Sock), Sock};
-        {error, Reason} ->
-            x({open, Reason})
+    OpenOpts = gen_opts(portnr(addrs(Addrs, Opts), PortNr)),
+    case get_open(OpenOpts) of
+              {ok, Sock} ->
+                  {get_addrs(Sock), Sock};
+              {error, Reason} ->
+                  x({open, Reason})
     end.
+
+set_open(OpenOpts) ->
+    Id =
+	case proplists:get_value(port, OpenOpts) of
+	    0 ->
+		erlang:make_ref();
+	    _ ->
+		lists:sort(OpenOpts)
+	end,
+    #open{id = Id,
+	  opts = OpenOpts,
+	  references = [],
+	  connects = #{}}.
+
+get_open(OpenOpts) ->
+    Open = set_open(OpenOpts),
+    case diameter_sctp_sup:start_child(Open) of
+	{error, {already_started, Pid}} ->
+	    gen_server:call(Pid, {get_open, self()});
+	{ok, Pid} ->
+	    gen_server:call(Pid, {get_open, self()});
+	E ->
+	    E
+    end.
+
+get_addrs(Pid) ->
+    gen_server:call(Pid, get_addrs).
 
 addrs(Addrs, Opts) ->
     case lists:mapfoldl(fun ipaddr/2, false, Opts) of
@@ -418,6 +477,11 @@ gen_opts(Opts) ->
     [[],[],[],[],[]] == L orelse ?ERROR({reserved_options, Opts}),
     [binary, {active, once} | Opts].
 
+
+get_port(Port) when is_port(Port) ->
+    inet:port(Port);
+get_port(Pid) when is_pid(Pid) ->
+    gen_server:call(Pid, get_port).
 %% ---------------------------------------------------------------------------
 %% # ports/0-1
 %% ---------------------------------------------------------------------------
@@ -425,13 +489,13 @@ gen_opts(Opts) ->
 ports() ->
     Ts = diameter_reg:match({?MODULE, '_', '_'}),
     [{type(T), N, Pid} || {{?MODULE, T, {_, {_, S}}}, Pid} <- Ts,
-                          {ok, N} <- [inet:port(S)]].
+                          {ok, N} <- [get_port(S)]].
 
 ports(Ref) ->
     Ts = diameter_reg:match({?MODULE, '_', {Ref, '_'}}),
     [{type(T), N, Pid} || {{?MODULE, T, {R, {_, S}}}, Pid} <- Ts,
                           R == Ref,
-                          {ok, N} <- [inet:port(S)]].
+                          {ok, N} <- [get_port(S)]].
 
 type(listener) ->
     listen;
@@ -449,6 +513,38 @@ handle_call({{accept, Ref}, Pid}, _, #listener{ref = Ref} = S) ->
 %% Transport is telling us of parent death.
 handle_call({stop, _Pid} = Reason, _From, #monitor{} = S) ->
     {stop, {shutdown, Reason}, ok, S};
+
+%% Port holding process
+handle_call({get_open, Pid}, _F, #open{references = Rs} = S) ->
+    erlang:monitor(process, Pid),
+    {reply, {ok, self()}, S#open{references = [Pid|Rs]}};
+
+handle_call(get_addrs, _F, #open{socket=Sock} = S) ->
+    {reply, addrs(Sock), S};
+handle_call(get_port, _F, #open{socket=Sock} = S) ->
+    {reply, inet:port(Sock), S};
+
+handle_call({connect_init, Addr, Port, Opts}, {Pid, _Tag}, #open{socket=Sock} = S) ->
+    Connects = S#open.connects,
+    {Rep, NewS} =
+	case gen_sctp:connect_init(Sock, Addr, Port, Opts) of
+	    ok ->
+		NewC = Connects#{{Addr, Port} => Pid},
+		{ok, S#open{connects=NewC}};
+	    {error, _} = E->
+		{E, S}
+	end,
+    {reply, Rep, NewS};
+
+handle_call({listen, Opt}, {Pid, _Tag}, #open{socket=Sock} = S) ->
+    {Rep, NewS} =
+	case gen_sctp:listen(Sock, Opt) of
+	    ok ->
+		{ok, S#open{listener=Pid}};
+	    {error, _} = E ->
+		{E, S}
+	end,
+    {reply, Rep, NewS};
 
 handle_call(_, _, State) ->
     {reply, nok, State}.
@@ -472,7 +568,11 @@ handle_info(T, #listener{} = S) ->
 
 handle_info(T, #monitor{} = S) ->
     m(T,S),
-    {noreply, S}.
+    {noreply, S};
+
+%% socket holding process
+handle_info(M, #open{} = S) ->
+    {noreply, #open{} = o(M,S)}.
 
 %% Prior to the possibility of setting pool_size on in transport
 %% configuration, a new accepting transport was only started following
@@ -503,8 +603,11 @@ terminate(_, #transport{assoc_id = undefined}) ->
 terminate(_, #transport{socket = Sock}) ->
     gen_sctp:close(Sock);
 
-terminate(_, #listener{socket = Sock}) ->
-    gen_sctp:close(Sock).
+terminate(_, #open{socket = Sock}) ->
+    gen_sctp:close(Sock);
+
+terminate(_, #listener{}) ->
+    ok.
 
 %% ---------------------------------------------------------------------------
 
@@ -519,19 +622,16 @@ getr(Key) ->
 %% Transition listener state.
 
 %% Incoming message from SCTP.
-l({sctp, Sock, _RA, _RP, Data} = T, #listener{socket = Sock,
-                                              opts = Opts}
+%% Socket has already been peeled off by process opening the socket.
+l({sctp, Sock, _RA, _RP, _D} = T, #listener{opts = Opts}
                                     = S) ->
-    Id = assoc_id(Data),
     {TPid, NewS} = accept(S),
-    TPid ! {peeloff, setelement(2, T, peeloff(Sock, Id, TPid)), Opts},
-    setopts(Sock),
+    gen_sctp:controlling_process(Sock, TPid),
+    TPid ! {peeloff, T, Opts},
     NewS;
 
 %% Service process has died.
-l({'DOWN', _, process, Pid, _} = T, #listener{service = Pid,
-                                              socket = Sock}) ->
-    gen_sctp:close(Sock),
+l({'DOWN', _, process, Pid, _} = T, #listener{service = Pid}) ->
     x(T);
 
 %% Accepting process has died.
@@ -539,8 +639,7 @@ l({'DOWN', _MRef, process, TPid, _}, #listener{pending = {_,Q}} = S) ->
     down(queue:member(TPid, Q), TPid, S);
 
 %% Transport has been removed.
-l({transport, remove, _} = T, #listener{socket = Sock}) ->
-    gen_sctp:close(Sock),
+l({transport, remove, _} = T, #listener{}) ->
     x(T).
 
 %% down/3
@@ -577,6 +676,10 @@ t(T,S) ->
 %% transition/2
 
 %% Incoming message.
+transition({sctp, Sock, _RA, _RP, Data},
+	   #transport{socket = undefined, mode= {connect,_}} = S) ->
+   setopts(S, recv(Data, S#transport{active = false, socket = Sock}));
+
 transition({sctp, Sock, _RA, _RP, Data}, #transport{socket = Sock} = S) ->
     setopts(S, recv(Data, S#transport{active = false}));
 
@@ -641,6 +744,29 @@ m({Msg, StreamId}, #monitor{socket = Sock,
 
 m({'DOWN', _, process, TPid, _} = T, #monitor{transport = TPid}) ->
     x(T).
+
+%% port holding process
+o_peel_off(S, P, {_,#sctp_assoc_change{state=comm_up, assoc_id = Id}}) ->
+    {ok, NewS} = gen_sctp:peeloff(S, Id),
+    ok = gen_sctp:controlling_process(NewS, P),
+    NewS;
+o_peel_off(S,_P,_D) ->
+    S.
+
+o({sctp, Sock, RA, RP, D}, #open{} = S) ->
+    Pid = get_pid({RA, RP}, S),
+    Sock1 = o_peel_off(Sock, Pid, D),
+    Pid ! {sctp, Sock1, RA, RP, D},
+    setopts(Sock),
+    S#open{connects = maps:remove({RA,RP}, S#open.connects)};
+
+o({'DOWN', _M, process, Pid, _R}, #open{references=Refs} = S) ->
+    case lists:delete(Pid,Refs) of
+	[] ->
+	    x(normal);
+	NewRefs ->
+	    S#open{references=NewRefs}
+    end.
 
 %% Crash on anything unexpected.
 
@@ -733,8 +859,9 @@ send(StreamId, Msg, #transport{send = MPid} = S) ->
 send(Sock, AssocId, StreamId, #diameter_packet{bin = Bin}) ->
     send(Sock, AssocId, StreamId, Bin);
 
-send(Sock, AssocId, StreamId, Bin) ->
-    case gen_sctp:send(Sock, AssocId, StreamId, Bin) of
+%% AssocId is ignored since we are in one-to-one style socket
+send(Sock, _AssocId, StreamId, Bin) ->
+    case gen_sctp:send(Sock, 0, StreamId, Bin) of
         ok ->
             ok;
         {error, Reason} ->
@@ -754,29 +881,22 @@ recv({_, #sctp_assoc_change{state = comm_up,
      = S) ->
     Ref = getr(?REF_KEY),
     publish(T, Ref, Id, Sock),
-    %% Deal with different association id after peeloff on Solaris by
-    %% taking the id from the first reception.
-    up(S#transport{assoc_id = T == accept orelse Id,
+    up(S#transport{assoc_id = Id,
                    streams = {IS, OS}});
 
 %% ... or not: try the next address.
 recv({_, #sctp_assoc_change{} = E},
      #transport{assoc_id = undefined,
-                socket = Sock,
-                mode = {connect = C, {[RA|RAs], RP, Es}}}
+                osocket = Sock,
+                init_opts = InitOpts,
+		mode = {connect = C, {[RA|RAs], RP, Es}}}
      = S) ->
-    S#transport{mode = {C, connect(Sock, RAs, RP, [{RA,E} | Es])}};
+    S#transport{socket=undefined,
+		mode = {C, connect(Sock, RAs, RP, InitOpts, [{RA,E} | Es])}};
 
 %% Association failure.
 recv({_, #sctp_assoc_change{}}, _) ->
     stop;
-
-%% First inbound on an accepting transport.
-recv({[#sctp_sndrcvinfo{assoc_id = Id}], _Bin}
-     = T,
-     #transport{assoc_id = true}
-     = S) ->
-    recv(T, S#transport{assoc_id = Id});
 
 %% Inbound Diameter message.
 recv({[#sctp_sndrcvinfo{}], Bin} = Msg, S)
@@ -892,50 +1012,36 @@ dq(Q) ->
     {{value, TPid}, NQ} = queue:out(Q),
     {TPid, NQ}.
 
-%% assoc_id/1
-%%
-%% It's unclear if this is needed, or if the first message on an
-%% association is always sctp_assoc_change, but don't assume since
-%% SCTP behaviour differs between operating systems.
-
-assoc_id({[#sctp_sndrcvinfo{assoc_id = Id}], _}) ->
-    Id;
-assoc_id({_, Rec}) ->
-    id(Rec).
-
-id(#sctp_shutdown_event{assoc_id = Id}) ->
-    Id;
-id(#sctp_assoc_change{assoc_id = Id}) ->
-    Id;
-id(#sctp_sndrcvinfo{assoc_id = Id}) ->
-    Id;
-id(#sctp_paddr_change{assoc_id = Id}) ->
-    Id;
-id(#sctp_adaptation_event{assoc_id = Id}) ->
-    Id.
-
-%% peeloff/3
-
-peeloff(LSock, Id, TPid) ->
-    {ok, Sock} = gen_sctp:peeloff(LSock, Id),
-    ok = gen_sctp:controlling_process(Sock, TPid),
-    Sock.
-
 %% connect/4
 
-connect(_, [], _, Reasons) ->
+connect(_, [], _, _Opts, Reasons) ->
     x({connect, lists:reverse(Reasons)});
 
-connect(Sock, [Addr | AT] = As, Port, Reasons) ->
-    case gen_sctp:connect_init(Sock, Addr, Port, []) of
+connect(Sock, [Addr | AT] = As, Port, Opts, Reasons) ->
+    case do_connect_init(Sock, Addr, Port, Opts) of
         ok ->
             {As, Port, Reasons};
         {error, _} = E ->
-            connect(Sock, AT, Port, [{Addr, E} | Reasons])
+            connect(Sock, AT, Port, Opts, [{Addr, E} | Reasons])
+    end.
+
+do_connect_init(Pid, Addr, Port, Opts) ->
+    gen_server:call(Pid, {connect_init, Addr, Port, Opts}).
+do_listen(Pid, Opt) ->
+    gen_server:call(Pid, {listen, Opt}).
+
+get_pid({RA, RP}, S) ->
+    case maps:get({RA, RP}, S#open.connects, not_found) of
+	Pid when is_pid(Pid) ->
+	    Pid;
+	not_found ->
+	    S#open.listener
     end.
 
 %% setopts/2
-
+% no stream socket yet
+setopts(_, #transport{socket = undefined} = S) ->
+    S;
 setopts(_, #transport{socket = Sock,
                       active = A,
                       recv = B}
@@ -947,6 +1053,9 @@ setopts(_, #transport{socket = Sock,
 setopts(_, #transport{} = S) ->
     S;
 
+% no stream socket yet
+setopts(#transport{socket = undefined}, T) ->
+    T;
 setopts(#transport{socket = Sock}, T) ->
     setopts(Sock),
     T.
