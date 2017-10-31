@@ -445,6 +445,7 @@ static unsigned long one_value = 1;
 
 #endif /* ifndef HAVE_USRSCTP */
 
+#if !defined(HAVE_USRSCTP)
 #if defined(__GNUC__) && defined(HAVE_SCTP_BINDX)
 static typeof(sctp_bindx) *p_sctp_bindx = NULL;
 #else
@@ -484,14 +485,20 @@ static typeof(sctp_freepaddrs) *p_sctp_freepaddrs = NULL;
 #else
 static void (*p_sctp_freepaddrs)(struct sockaddr *addrs) = NULL;
 #endif
+#endif /* !defined(HAVE_USRSCTP) */
 
 #ifdef HAVE_USRSCTP
+static typeof(usrsctp_bindx) *p_sctp_bindx = NULL;
+static typeof(usrsctp_getladdrs) *p_sctp_getladdrs = NULL;
+static typeof(usrsctp_freeladdrs) *p_sctp_freeladdrs = NULL;
+static typeof(usrsctp_getpaddrs) *p_sctp_getpaddrs = NULL;
+static typeof(usrsctp_freepaddrs) *p_sctp_freepaddrs = NULL;
 static typeof(usrsctp_set_non_blocking) *p_usrsctp_set_non_blocking = NULL;
 static typeof(usrsctp_init) *p_usrsctp_init = NULL;
 static typeof(usrsctp_peeloff) *p_usrsctp_peeloff = NULL;
 static typeof(usrsctp_sysctl_set_sctp_ecn_enable) *p_usrsctp_sysctl_set_sctp_ecn_enable = NULL;
 static typeof(usrsctp_sysctl_set_sctp_auth_enable) *p_usrsctp_sysctl_set_sctp_auth_enable = NULL;
-
+static typeof(usrsctp_sysctl_set_sctp_delayed_sack_time_default) *p_usrsctp_sysctl_set_sctp_delayed_sack_time_default = NULL;
 #ifdef SCTP_DEBUG
 static typeof(usrsctp_sysctl_set_sctp_debug_on) *p_usrsctp_set_debug_on = NULL;
 #endif
@@ -2921,7 +2928,7 @@ static void usrsctp_setup_sock(struct socket *sock, inet_descriptor *desc)
 	perror("usrsctp_setsockopt SCTP_RECVRCVINFO");
     
     if (p_usrsctp_setsockopt(sock, IPPROTO_SCTP, SCTP_NOTIF_FD, &fds[1], sizeof(int)) < 0)
-	perror("usrsctp_setsockopt SCTP_RECVRCVINFO");
+	perror("usrsctp_setsockopt SCTP_NOTIF_FD");
 
     return;
 }
@@ -2929,7 +2936,6 @@ static void usrsctp_setup_sock(struct socket *sock, inet_descriptor *desc)
 static struct socket* usrsctp_sock_open(int domain, int type, int protocol, inet_descriptor *desc) 
 {
     struct socket* sock;
-
     sock = p_usrsctp_socket(domain, type, protocol,
 			    NULL,
 			    NULL,
@@ -3198,6 +3204,9 @@ static int sctp_parse_async_event
 
 	    i = LOAD_INT   (spec, i, sock_ntohs(sptr->sre_error));
 	    i = LOAD_INT   (spec, i, sptr->sre_assoc_id);
+
+	    DEBUGF(("sre_length %d", sptr->sre_length));
+
 
 #	    ifdef HAVE_STRUCT_SCTP_REMOTE_ERROR_SRE_DATA
 	    chunk = (char*) (&(sptr->sre_data));
@@ -4185,6 +4194,9 @@ static int inet_init()
 		if (erts_sys_ddll_sym(h_libsctp, "usrsctp_sysctl_set_sctp_ecn_enable", &ptr) == 0) {
 		    p_usrsctp_sysctl_set_sctp_ecn_enable = ptr;
 		}
+		if (erts_sys_ddll_sym(h_libsctp, "usrsctp_sysctl_set_sctp_delayed_sack_time_default", &ptr) == 0) {
+		    p_usrsctp_sysctl_set_sctp_delayed_sack_time_default = ptr;
+		}
 #ifdef SCTP_DEBUG
 		if (erts_sys_ddll_sym(h_libsctp, "usrsctp_sysctl_set_sctp_debug_on", &ptr) == 0) {
 		    p_usrsctp_set_debug_on = ptr;
@@ -4209,6 +4221,7 @@ static int inet_init()
 		drop_root_priv();
 		//p_usrsctp_sysctl_set_sctp_ecn_enable(0);
 		//p_usrsctp_sysctl_set_sctp_auth_enable(0);
+		p_usrsctp_sysctl_set_sctp_delayed_sack_time_default(10);
 #ifdef SCTP_DEBUG
 		p_usrsctp_set_debug_on(SCTP_DEBUG_ALL);
 #endif		
@@ -4611,12 +4624,8 @@ static void desc_close(inet_descriptor* desc)
 #ifdef HAVE_USRSCTP
     if (IS_SCTP(desc)) {
 	p_usrsctp_close(desc->usrsctp_sock);
-	/* close pipes */
-	close(desc->s);	
+	/* close write side of pipe */
 	close(desc->wpipe);
-	desc->s = INVALID_SOCKET;
-	desc->event_mask = 0;
-	return;
     }
 #endif
     if (desc->s != INVALID_SOCKET) {
@@ -7371,6 +7380,11 @@ static int sctp_set_opts(inet_descriptor* desc, char* ptr, int len)
     }
     /* If we got here, all "sock_setopt"s above were successful:   */
     if (IS_OPEN(desc) && desc->active != old_active) {
+#ifdef HAVE_USRSCTP
+	if(desc->active) {
+	    write(desc->wpipe, "!", 1);
+	}
+#endif
 	sock_select(desc, (FD_READ|FD_CLOSE), (desc->active > 0));
     }
     return 0;
@@ -7792,6 +7806,14 @@ static int load_paddrinfo (ErlDrvTermData * spec, int i,
     return i;
 }
 
+#ifdef HAVE_USRSCTP
+#define sctp_getopt(proto, type, value, size) \
+    p_usrsctp_getsockopt(desc->usrsctp_sock, proto, type, value, size)
+#else
+#define sctp_getopt(proto, type, value, size) \
+    sock_getopt(desc->s, proto, type, value, size)
+#endif
+
 /*
 **  "sctp_fill_opts":   Returns {ok, Results}, or an error:
 */
@@ -7929,9 +7951,9 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    rti.srto_assoc_id = GET_ASSOC_ID(buf);
 	    buf    += ASSOC_ID_LEN;
 	    buflen -= ASSOC_ID_LEN;
-	    
-	    if (sock_getopt(desc->s, IPPROTO_SCTP, SCTP_RTOINFO, 
-			    &rti, &sz) < 0) continue;
+	    if (sctp_getopt(IPPROTO_SCTP, SCTP_RTOINFO, 
+			    &rti, &sz) < 0)
+		continue;
 	    /* Fill in the response: */
 	    PLACE_FOR(spec, i, 
 		      2*LOAD_ATOM_CNT + LOAD_ASSOC_ID_CNT + 
@@ -7956,7 +7978,7 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    buf    += ASSOC_ID_LEN;
 	    buflen -= ASSOC_ID_LEN;
 	    
-	    if (sock_getopt(desc->s, IPPROTO_SCTP, SCTP_ASSOCINFO, 
+	    if (sctp_getopt(IPPROTO_SCTP, SCTP_ASSOCINFO, 
 			    &ap, &sz) < 0) continue;
 	    /* Fill in the response: */
 	    PLACE_FOR(spec, i, 
@@ -7979,7 +8001,7 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    struct       sctp_initmsg im;
 	    unsigned int sz = sizeof(im);
 	    
-	    if (sock_getopt(desc->s, IPPROTO_SCTP, SCTP_INITMSG, 
+	    if (sctp_getopt(IPPROTO_SCTP, SCTP_INITMSG, 
 			    &im, &sz) < 0) continue;
 	    /* Fill in the response: */
 	    PLACE_FOR(spec, i, 
@@ -8001,7 +8023,7 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    struct linger lg;
 	    unsigned int  sz = sizeof(lg);
 	    
-	    if (sock_getopt(desc->s, SOL_SOCKET, SO_LINGER,
+	    if (sctp_getopt(SOL_SOCKET, SO_LINGER,
 			    &lg, &sz) < 0) continue;
 	    /* Fill in the response: */
 	    PLACE_FOR(spec, i, 
@@ -8164,7 +8186,7 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    }
 	    default:	 ASSERT(0);
 	    }
-	    if (sock_getopt (desc->s, proto, type, &res, &sz) < 0) continue;
+	    if (sctp_getopt(proto, type, &res, &sz) < 0) continue;
 	    /* Form the result: */
 	    PLACE_FOR(spec, i, LOAD_ATOM_CNT + 
 		      (is_int ? LOAD_INT_CNT : LOAD_BOOL_CNT) +
@@ -8189,7 +8211,7 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    buf    += ASSOC_ID_LEN;
 	    buflen -= ASSOC_ID_LEN;
 	    
-	    if (sock_getopt(desc->s, IPPROTO_SCTP,
+	    if (sctp_getopt(IPPROTO_SCTP,
 			    (eopt == SCTP_OPT_PRIMARY_ADDR) ?
 			    SCTP_PRIMARY_ADDR : SCTP_SET_PEER_PRIMARY_ADDR,
 			    &sp, &sz) < 0) continue;
@@ -8220,7 +8242,7 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    struct       sctp_setadaptation ad;
 	    unsigned int sz  = sizeof (ad);
 	    
-	    if (sock_getopt(desc->s, IPPROTO_SCTP, SCTP_ADAPTATION_LAYER, 
+	    if (sctp_getopt(IPPROTO_SCTP, SCTP_ADAPTATION_LAYER, 
 			    &ad, &sz) < 0) continue;
 	    /* Fill in the response: */
 	    PLACE_FOR(spec, i, 
@@ -8261,7 +8283,7 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    }
 	    buflen -= buf - before;
 
-	    if (sock_getopt(desc->s, IPPROTO_SCTP, SCTP_PEER_ADDR_PARAMS, 
+	    if (sctp_getopt(IPPROTO_SCTP, SCTP_PEER_ADDR_PARAMS, 
 			    &ap, &sz) < 0) continue;
 	    /* Fill in the response: */
 	    PLACE_FOR(spec, i, 
@@ -8392,7 +8414,7 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    buf    += ASSOC_ID_LEN;
 	    buflen -= ASSOC_ID_LEN;
 	    
-	    if (sock_getopt(desc->s, IPPROTO_SCTP, SCTP_DELAYED_ACK_TIME,
+	    if (sctp_getopt(IPPROTO_SCTP, SCTP_DELAYED_ACK_TIME,
 			    &av, &sz) < 0) continue;
 	    /* Fill in the response: */
 	    PLACE_FOR(spec, i, 2*LOAD_ATOM_CNT + LOAD_ASSOC_ID_CNT +
@@ -8416,7 +8438,7 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    buf    += ASSOC_ID_LEN;
 	    buflen -= ASSOC_ID_LEN;
 	    
-	    if (sock_getopt(desc->s, IPPROTO_SCTP, SCTP_STATUS,
+	    if (sctp_getopt(IPPROTO_SCTP, SCTP_STATUS,
 			    &st, &sz) < 0) continue;
 	    /* Fill in the response: */
 	    PLACE_FOR(spec, i, 3*LOAD_ATOM_CNT + LOAD_ASSOC_ID_CNT +
@@ -8512,7 +8534,7 @@ static ErlDrvSSizeT sctp_fill_opts(inet_descriptor* desc,
 	    }
 	    buflen -= buf - before;
 
-	    if (sock_getopt(desc->s, IPPROTO_SCTP, SCTP_GET_PEER_ADDR_INFO,
+	    if (sctp_getopt(IPPROTO_SCTP, SCTP_GET_PEER_ADDR_INFO,
 			    &pai, &sz) < 0) continue;
 	    /* Fill in the response: */
 	    PLACE_FOR(spec, i, 
@@ -8984,7 +9006,13 @@ static ErlDrvSSizeT inet_ctl(inet_descriptor* desc, int cmd, char* buf,
 	    ErlDrvSizeT rlen;
 
 	    assoc_id = get_int32(buf);
-	    n = p_sctp_getpaddrs(desc->s, assoc_id, &sa);
+	    n = p_sctp_getpaddrs(
+#ifdef HAVE_USRSCTP
+	    desc->usrsctp_sock,
+#else 
+	    desc->s, 
+#endif
+	    assoc_id, &sa);
 	    rlen = reply_inet_addrs(n, (inet_address *) sa, rbuf, rsize, 0);
 	    if (n > 0) p_sctp_freepaddrs(sa);
 	    return rlen;
@@ -9060,7 +9088,13 @@ static ErlDrvSSizeT inet_ctl(inet_descriptor* desc, int cmd, char* buf,
 	    ErlDrvSizeT rlen;
 
 	    assoc_id = get_int32(buf);
-	    n = p_sctp_getladdrs(desc->s, assoc_id, &sa);
+	    n = p_sctp_getladdrs(
+#ifdef HAVE_USRSCTP
+		desc->usrsctp_sock,
+#else
+		desc->s, 
+#endif		
+		assoc_id, &sa);
 	    rlen = reply_inet_addrs(n, (inet_address *) sa, rbuf, rsize, 0);
 	    if (n > 0) p_sctp_freeladdrs(sa);
 	    return rlen;
@@ -11346,8 +11380,7 @@ static udp_descriptor* sctp_inet_copy(udp_descriptor* desc, SOCKET s, int* err)
        write a byte on the pipe to trigger an read to check 
        TODO: add support for passing notif fd in peeloff call instead
     */
-    char b=1;
-    write(INETP(copy_desc)->wpipe, &b, 1);
+    write(INETP(copy_desc)->wpipe, "!", 1);
     
     if ((copy_desc->inet.usrsctp_sock = s) != NULL)
 #else
@@ -11630,39 +11663,21 @@ static ErlDrvSSizeT packet_inet_ctl(ErlDrvData e, unsigned int cmd, char* buf,
 	        return ctl_xerror(xerror, rbuf, rsize);
 #ifdef HAVE_USRSCTP
 	    code = p_usrsctp_connect(desc->usrsctp_sock, &remote.sa, len);
-	    if (!desc->active)
-		sock_select(desc, FD_READ, 1);
 #else
-	    sock_select(desc, FD_CONNECT, 1);
 	    code = sock_connect(desc->s, &remote.sa, len);
 #endif
 	    if (IS_SOCKET_ERROR(code) && (sock_errno() == EINPROGRESS)) {
 		/* XXX: Unix only -- WinSock would have a different cond! */
-#ifdef HAVE_USRSCTP
-		/* fake set connected for now */
-		desc->state = INET_STATE_CONNECTED;
-#else
-		desc->state = INET_STATE_CONNECTING;
-#endif
 		if (timeout != INET_INFINITY)
 		    driver_set_timer(desc->port, timeout);
 		enq_async(desc, tbuf, INET_REQ_CONNECT);
+		async_ok(desc);
 	    }
 	    else if (code == 0) { /* OK we are connected */
-#ifdef HAVE_USRSCTP
-		if (!desc->active)
-		    sock_select(desc, FD_READ, 0);
-#else
-		sock_select(desc, FD_CONNECT, 0);
-#endif
-		desc->state = INET_STATE_CONNECTED;
 		enq_async(desc, tbuf, INET_REQ_CONNECT);
 		async_ok(desc);
 	    }
 	    else {
-#ifndef HAVE_USRSCTP
-		sock_select(desc, FD_CONNECT, 0);
-#endif
 		return ctl_error(sock_errno(), rbuf, rsize);
 	    }
 	    return ctl_reply(INET_REP_OK, tbuf, 2, rbuf, rsize);
@@ -11817,7 +11832,11 @@ static ErlDrvSSizeT packet_inet_ctl(ErlDrvData e, unsigned int cmd, char* buf,
 
 	    desc->caller = driver_caller(desc->port);
 	    if ((new_udesc = sctp_inet_copy(udesc, new_socket, &err)) == NULL) {
+#ifdef HAVE_USRSCTP
+		p_usrsctp_close(new_socket);
+#else
 		sock_close(new_socket);
+#endif
 		desc->caller = 0;
 		return ctl_error(err, rbuf, rsize);
 	    }
@@ -11913,8 +11932,10 @@ static void packet_inet_command(ErlDrvData e, char* buf, ErlDrvSizeT len)
     if (IS_SCTP(desc))
     {
 	ErlDrvSizeT   data_len;
+#ifndef HAVE_USRSCTP
 	struct iovec  iov[1];		 /* For real data            */
 	struct msghdr mhdr;		 /* Message wrapper          */
+#endif
 
 	if (len < SCTP_GET_SENDPARAMS_LEN) {
 	    inet_reply_error(desc, EINVAL);
@@ -11937,6 +11958,7 @@ static void packet_inet_command(ErlDrvData e, char* buf, ErlDrvSizeT len)
 			       0);
 
 
+	inet_output_count(desc, data_len);
 
 #else
 	struct sctp_sndrcvinfo *sri;     /* The actual ancilary data */
@@ -12091,9 +12113,7 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	if (IS_SCTP(desc)) {
 	    unsigned int infotype = 0;
 	    socklen_t infolen = SCTP_ANC_BUFF_SIZE;
-	    struct sockaddr addr;
 	    char dummyread[1];
-	    struct cmsghdr *cmsghdr = ancd;
 	    iov->iov_base = udesc->i_ptr; /* Data will come here    */
 	    iov->iov_len = desc->bufsz; /* Remaining buffer space */
 	    
@@ -12104,9 +12124,10 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	    mhdr.msg_control	= ancd;
 	    mhdr.msg_controllen	= SCTP_ANC_BUFF_SIZE;
 	    mhdr.msg_flags	= 0;	   /* To be filled by "recvmsg"    */
-	     
+	   
+	    /* read bytes from notif fd */
+	    read(desc->s, dummyread, 1);
 	    /* Do the actual SCTP receive: */
-	    read(desc->s, dummyread, 1); 
 	    DEBUGF(("usrsctp_recvv about to be called %x\r\n", desc->usrsctp_sock));
 	    n = p_usrsctp_recvv(desc->usrsctp_sock,
 				udesc->i_ptr,
@@ -12121,7 +12142,9 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	    DEBUGF(("n -> %d\r\n", n));
 	    DEBUGF(("infolen -> %d\r\n", infolen));
 	    DEBUGF(("infotype -> %d\r\n", infotype));
+#ifdef INET_DRV_DEBUG
 	    struct sctp_rcvinfo* ri = (struct sctp_rcvinfo *) mhdr.msg_control;
+#endif
 	    DEBUGF(("sctp_rcvinfo->rcv_sid %d\r\n", ri->rcv_sid));
 	    DEBUGF(("msg_flags %d\r\n", mhdr.msg_flags));
 
@@ -12178,7 +12201,7 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	    }
 	    /* would block error - try again */
 	    if (!desc->active
-#ifdef defined(HAVE_SCTP) && defined(USRSCTP)
+#ifdef HAVE_SCTP
 		|| short_recv
 #endif
 		) {
@@ -12187,7 +12210,7 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	    return count;		/* strange, not ready */
 	}
 
-#if defined(HAVE_SCTP) && defined(USRCTP)
+#ifdef HAVE_SCTP
 	if (IS_SCTP(desc) && (short_recv = !(mhdr.msg_flags & MSG_EOR))) {
 	    
 	    /* SCTP non-final message fragment */
@@ -12256,7 +12279,7 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
      * that got that many messages or an SCTP socket that got that
      * many message fragments but still not the final
      */
-#ifdef defined(HAVE_SCTP) && defined(USRSCTP)
+#if defined(HAVE_SCTP) && defined(USRSCTP)
     if (short_recv) {
 	sock_select(desc, FD_READ, 1);
     }
