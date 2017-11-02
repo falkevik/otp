@@ -52,6 +52,7 @@
 #include "erl_bif_unique.h"
 #include "erl_hl_timer.h"
 #include "erl_time.h"
+#include "erl_port.h"
 
 extern ErlDrvEntry fd_driver_entry;
 extern ErlDrvEntry vanilla_driver_entry;
@@ -7659,6 +7660,22 @@ static int do_driver_monitor_process(Port *prt,
     erts_smp_proc_unlock(rp, ERTS_PROC_LOCK_LINK);
     ref_to_driver_monitor(ref,monitor);
     return 0;
+}
+
+
+Eterm driver_erts_drvport2id(ErlDrvPort drvport)
+{
+    return erts_drvport2id(drvport);
+}
+
+int driver_port_task_input_schedule(Eterm port)
+{
+    return erts_port_task_schedule(port, NULL, ERTS_PORT_TASK_INPUT, -1);
+}
+
+int driver_port_task_output_schedule(Eterm port)
+{
+    return erts_port_task_schedule(port, NULL, ERTS_PORT_TASK_OUTPUT, -1);
 }
 
 /*

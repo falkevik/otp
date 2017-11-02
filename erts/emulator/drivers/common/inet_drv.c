@@ -348,7 +348,6 @@ static unsigned long one_value = 1;
 #ifdef HAVE_USRSCTP
 //#define SCTP_DEBUG 1
 #include <usrsctp.h>
-#include "safe_hash.h"
 #else
 #include <netinet/sctp.h>
 #endif
@@ -510,76 +509,9 @@ static typeof(usrsctp_recvv) *p_usrsctp_recvv = NULL;
 static typeof(usrsctp_shutdown) *p_usrsctp_shutdown = NULL;
 static typeof(usrsctp_connect) *p_usrsctp_connect = NULL;
 static typeof(usrsctp_close) *p_usrsctp_close = NULL;
-
-struct usrsctp_driver_sock {
-    struct socket *so;
-    Eterm port;
-};
-
-static SafeHash drv_usrsctp_sock_tab;
-static int num_drv_usrsctp_prealloc;
-static struct usrsctp_driver_sock *drv_usrsctp_prealloc_first;
-erts_smp_spinlock_t drv_usrsctp_prealloc_lock;
-
-static ERTS_INLINE struct usrsctp_driver_sock *hash_get_usrsctp_driver(struct socket *so)
-{
-    struct usrsctp_driver_sock tmpl;
-    tmpl.so = so;
-    return (struct usrsctp_driver_sock *) safe_hash_get(&drv_usrsctp_sock_tab, (void *) &tmpl);
-}
-
-static ERTS_INLINE struct usrsctp_driver_sock* hash_new_usrsctp_driver(struct socket *so, Eterm port)
-{
-    struct usrsctp_driver_sock tmpl;
-    tmpl.so = so;
-    tmpl.port = port;
-    return  (struct usrsctp_driver_sock *) safe_hash_put(&drv_usrsctp_sock_tab, (void *) &tmpl);
-}
-
-static ERTS_INLINE void hash_erase_drv_usrsctp(struct usrsctp_driver_sock *usrsctp_drv_sock)
-{
-    safe_hash_erase(&drv_usrsctp_sock_tab, (void *) usrsctp_drv_sock);
-}
-
-static SafeHashValue drv_usrsctp_hash(void *des)
-{
-    SafeHashValue val = (SafeHashValue) ((struct usrsctp_driver_sock *) des)->so;
-    return val ^ (val >> 8);  /* Good enough for aligned pointer values? */
-}
-
-static int drv_usrsctp_cmp(void *des1, void *des2)
-{
-    return ( ((struct usrsctp_driver_sock *) des1)->so == 
-	     ((struct usrsctp_driver_sock *) des2)->so
-	    ? 0 : 1);
-}
-
-static void *drv_usrsctp_alloc(void *des_tmpl)
-{
-    struct usrsctp_driver_sock *drv_sock;
-    drv_sock = (struct usrsctp_driver_sock *) 
-	    erts_alloc(ERTS_ALC_T_DRV_SCTP_SOCK, sizeof(struct usrsctp_driver_sock));
-    
-    *drv_sock = *((struct usrsctp_driver_sock *) des_tmpl);
-
-    return (void *) drv_sock;
-}
-
-static void drv_usrsctp_free(void *des)
-{
-    erts_free(ERTS_ALC_T_DRV_SCTP_SOCK, (void *) des); 
-}
-static void usrsctp_init_socket_hash()
-{
-    SafeHashFunctions hf;
-    hf.hash = &drv_usrsctp_hash;
-    hf.cmp = &drv_usrsctp_cmp;
-    hf.alloc = &drv_usrsctp_alloc;
-    hf.free = &drv_usrsctp_free;
-    safe_hash_init(ERTS_ALC_T_DRV_SCTP_SOCK, &drv_usrsctp_sock_tab, "drv_usrsctp_sock_tab", 
-	    1024, hf);
-}
-
+static typeof(usrsctp_event_rcv_cb) *p_usrsctp_event_rcv_cb = NULL;
+static typeof(usrsctp_readable) *p_usrsctp_readable = NULL;
+static typeof(usrsctp_writeable) *p_usrsctp_writeable = NULL;
 #endif  /* HAVE_USRSCTP */
 
 #endif /* #if defined(HAVE_SCTP_H) */
@@ -2910,6 +2842,81 @@ static ErlDrvTermData   am_sctp_rtoinfo, /* Option names */
 	 LOAD_NIL_CNT + LOAD_LIST_CNT + LOAD_ASSOC_ID_CNT + LOAD_TUPLE_CNT)
 
 #ifdef HAVE_USRSCTP
+
+#include "safe_hash.h"
+
+struct usrsctp_driver_sock {
+    SafeHashBucket hb;
+    struct socket *so;
+    inet_descriptor *desc;
+    Eterm port;
+};
+
+static SafeHash drv_usrsctp_sock_tab;
+
+static ERTS_INLINE struct usrsctp_driver_sock *hash_get_usrsctp_driver(struct socket *so)
+{
+    struct usrsctp_driver_sock tmpl;
+    tmpl.so = so;
+    return (struct usrsctp_driver_sock *) safe_hash_get(&drv_usrsctp_sock_tab, (void *) &tmpl);
+}
+
+static ERTS_INLINE struct usrsctp_driver_sock* hash_new_usrsctp_driver(struct socket *so, inet_descriptor *desc)
+{
+    struct usrsctp_driver_sock tmpl;
+    tmpl.so = so;
+    tmpl.port = driver_erts_drvport2id(desc->port);
+    tmpl.desc = desc;
+    return  (struct usrsctp_driver_sock *) safe_hash_put(&drv_usrsctp_sock_tab, (void *) &tmpl);
+}
+
+static ERTS_INLINE void hash_erase_drv_usrsctp(struct usrsctp_driver_sock *usrsctp_drv_sock)
+{
+    safe_hash_erase(&drv_usrsctp_sock_tab, (void *) usrsctp_drv_sock);
+}
+
+static SafeHashValue drv_usrsctp_hash(void *des)
+{
+    SafeHashValue val = (SafeHashValue) ((struct usrsctp_driver_sock *) des)->so;
+    return val ^ (val >> 8);  /* Good enough for aligned pointer values? */
+}
+
+static int drv_usrsctp_cmp(void *des1, void *des2)
+{   
+    return ( ((struct usrsctp_driver_sock *) des1)->so == 
+	     ((struct usrsctp_driver_sock *) des2)->so
+	    ? 0 : 1);
+}
+
+static void *drv_usrsctp_alloc(void *des_tmpl)
+{
+    struct usrsctp_driver_sock *in;
+    struct usrsctp_driver_sock *out;
+
+    in = (struct usrsctp_driver_sock *) des_tmpl;
+    out = (struct usrsctp_driver_sock *)
+	    erts_alloc(ERTS_ALC_T_DRV_SCTP_SOCK, sizeof(struct usrsctp_driver_sock));
+    out->so = in->so;
+    out->port = in->port;
+    out->desc = in->desc;
+
+    return (void *) out;
+}
+
+static void drv_usrsctp_free(void *des)
+{
+    erts_free(ERTS_ALC_T_DRV_SCTP_SOCK, (void *) des); 
+}
+static void usrsctp_init_socket_hash()
+{
+    SafeHashFunctions hf;
+    hf.hash = &drv_usrsctp_hash;
+    hf.cmp = &drv_usrsctp_cmp;
+    hf.alloc = &drv_usrsctp_alloc;
+    hf.free = &drv_usrsctp_free;
+    safe_hash_init(ERTS_ALC_T_DRV_SCTP_SOCK, &drv_usrsctp_sock_tab, "drv_usrsctp_sock_tab", 
+	    1024, hf);
+}
 //(struct sctp_rcvinfo *) mptr->msg_control
 static int usrsctp_parse_sndrcvinfo
 	   (ErlDrvTermData * spec, int i, struct msghdr *mptr)
@@ -2962,10 +2969,20 @@ static int usrsctp_parse_sndrcvinfo
     return i;
 }
 
+static void usrsctp_event_rcv_callback(struct socket *sock, void *arg)
+{
+    struct usrsctp_driver_sock *drv_sock;
+    drv_sock = hash_get_usrsctp_driver(sock);
+
+    if (drv_sock) {
+	if(drv_sock->desc->active)
+	    driver_port_task_input_schedule(drv_sock->port);
+    }
+}   
+
 static void usrsctp_setup_sock(struct socket *sock, inet_descriptor *desc)
 {
     int i;
-    int fds[2];
     const int on = 1;
     struct sctp_event event;
     uint16_t event_types[] = {SCTP_ASSOC_CHANGE,
@@ -2973,15 +2990,12 @@ static void usrsctp_setup_sock(struct socket *sock, inet_descriptor *desc)
 			      SCTP_REMOTE_ERROR,
 			      SCTP_SEND_FAILED_EVENT};
 
-    /* create pipes to be used with sock_select 
-	to emulate fd behaviour	*/
-    pipe(fds);
-    desc->s=fds[0];
-    desc->wpipe=fds[1];
-
+    /* set socket fd to something but not INVALID_SOCKET */
+    desc->s = -2;
+    
     p_usrsctp_set_non_blocking(sock, 1);
-    SET_NONBLOCKING(desc->s);
-
+    p_usrsctp_event_rcv_cb(sock, usrsctp_event_rcv_callback, NULL);
+    
     memset(&event, 0, sizeof(event));
     event.se_assoc_id = SCTP_ALL_ASSOC;
     event.se_on = 1;
@@ -2995,9 +3009,6 @@ static void usrsctp_setup_sock(struct socket *sock, inet_descriptor *desc)
     if (p_usrsctp_setsockopt(sock, IPPROTO_SCTP, SCTP_RECVRCVINFO, &on, sizeof(int)) < 0)
 	perror("usrsctp_setsockopt SCTP_RECVRCVINFO");
     
-    if (p_usrsctp_setsockopt(sock, IPPROTO_SCTP, SCTP_NOTIF_FD, &fds[1], sizeof(int)) < 0)
-	perror("usrsctp_setsockopt SCTP_NOTIF_FD");
-
     return;
 }
 
@@ -3009,9 +3020,12 @@ static struct socket* usrsctp_sock_open(int domain, int type, int protocol, inet
 			    NULL,
 			    0, NULL);
     usrsctp_setup_sock(sock, desc);
+    hash_new_usrsctp_driver(sock, desc);
 
     return sock;
 }
+
+
 
 #else
 
@@ -4273,6 +4287,15 @@ static int inet_init()
 		if (erts_sys_ddll_sym(h_libsctp, "usrsctp_set_non_blocking", &ptr) == 0) {
 		    p_usrsctp_set_non_blocking = ptr;
 		}
+		if (erts_sys_ddll_sym(h_libsctp, "usrsctp_event_rcv_cb", &ptr) == 0) {
+		    p_usrsctp_event_rcv_cb = ptr;
+		}
+		if (erts_sys_ddll_sym(h_libsctp, "usrsctp_readable", &ptr) == 0) {
+		    p_usrsctp_readable = ptr;
+		}
+		if (erts_sys_ddll_sym(h_libsctp, "usrsctp_writeable", &ptr) == 0) {
+		    p_usrsctp_writeable = ptr;
+		}
 		if (erts_sys_ddll_sym(h_libsctp, "usrsctp_freepaddrs", &ptr) == 0) {
 		    p_sctp_freepaddrs = ptr;
 		}
@@ -4692,9 +4715,11 @@ static void desc_close(inet_descriptor* desc)
     DEBUGF(("****desc_close called*****\r\n"));
 #ifdef HAVE_USRSCTP
     if (IS_SCTP(desc)) {
+	struct usrsctp_driver_sock drv_sock;
 	p_usrsctp_close(desc->usrsctp_sock);
-	/* close write side of pipe */
-	close(desc->wpipe);
+	drv_sock.so = desc->usrsctp_sock;
+	hash_erase_drv_usrsctp(&drv_sock);
+	desc->s = INVALID_SOCKET;
     }
 #endif
     if (desc->s != INVALID_SOCKET) {
@@ -7451,10 +7476,12 @@ static int sctp_set_opts(inet_descriptor* desc, char* ptr, int len)
     if (IS_OPEN(desc) && desc->active != old_active) {
 #ifdef HAVE_USRSCTP
 	if(desc->active) {
-	    write(desc->wpipe, "!", 1);
+	    if(p_usrsctp_readable(desc->usrsctp_sock))
+		driver_port_task_input_schedule(driver_erts_drvport2id(desc->port));
 	}
-#endif
+#else
 	sock_select(desc, (FD_READ|FD_CLOSE), (desc->active > 0));
+#endif
     }
     return 0;
 #   undef CHKLEN
@@ -11444,13 +11471,6 @@ static udp_descriptor* sctp_inet_copy(udp_descriptor* desc, SOCKET s, int* err)
 #ifdef HAVE_USRSCTP
     usrsctp_setup_sock(s,INETP(copy_desc));
     
-    /* a hack since we set the FD after the socket is peeled off
-       any incoming data after peeloff and set of notif fd are missed.
-       write a byte on the pipe to trigger an read to check 
-       TODO: add support for passing notif fd in peeloff call instead
-    */
-    write(INETP(copy_desc)->wpipe, "!", 1);
-    
     if ((copy_desc->inet.usrsctp_sock = s) != NULL)
 #else
     if ((copy_desc->inet.s = s) != INVALID_SOCKET) 
@@ -11494,11 +11514,15 @@ static udp_descriptor* sctp_inet_copy(udp_descriptor* desc, SOCKET s, int* err)
     copy_desc->inet.port = port;
     copy_desc->inet.dport = driver_mk_port(port);
     *err = 0;
+#ifdef HAVE_USRSCTP
+    hash_new_usrsctp_driver(copy_desc->inet.usrsctp_sock, &(copy_desc->inet));
+    if(copy_desc->inet.active && p_usrsctp_readable(s))
+	driver_port_task_input_schedule(driver_erts_drvport2id(copy_desc->inet.port));
+#endif
 
     return copy_desc;
 }
 #endif
-
 
 
 #ifdef HAVE_UDP
@@ -11911,8 +11935,9 @@ static ErlDrvSSizeT packet_inet_ctl(ErlDrvData e, unsigned int cmd, char* buf,
 	    }
 	    new_udesc->inet.state = INET_STATE_CONNECTED;
 	    new_udesc->inet.stype = SOCK_STREAM;
+#ifndef HAVE_USRSCTP
 	    SET_NONBLOCKING(new_udesc->inet.s);
-
+#endif
 	    inet_reply_ok_port(desc, new_udesc->inet.dport);
 	    (*rbuf)[0] = INET_REP;
 	    return 1;
@@ -12194,8 +12219,6 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	    mhdr.msg_controllen	= SCTP_ANC_BUFF_SIZE;
 	    mhdr.msg_flags	= 0;	   /* To be filled by "recvmsg"    */
 	   
-	    /* read bytes from notif fd */
-	    read(desc->s, dummyread, 3);
 	    /* Do the actual SCTP receive: */
 	    DEBUGF(("usrsctp_recvv about to be called %x\r\n", desc->usrsctp_sock));
 	    n = p_usrsctp_recvv(desc->usrsctp_sock,
@@ -12260,7 +12283,10 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 		if (!desc->active) {
 		    async_error(desc, err);
 		    driver_cancel_timer(desc->port);
-		    sock_select(desc,FD_READ,0);
+#ifndef HAVE_USRSCTP
+		    if(!IS_SCTP(desc))
+#endif
+			sock_select(desc,FD_READ,0);
 		}
 		else {
 		    /* This is for an active desc only: */
@@ -12274,7 +12300,9 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 		|| short_recv
 #endif
 		) {
+#ifndef HAVE_USRSCTP
 		sock_select(desc,FD_READ,1);
+#endif
 	    }
 	    return count;		/* strange, not ready */
 	}
@@ -12338,7 +12366,9 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	    count++;
 	    if (!desc->active) {
 		driver_cancel_timer(desc->port); /* possibly cancel */
+#ifndef HAVE_USRSCTP
 		sock_select(desc,FD_READ,0);
+#endif
 		return count;  /* passive mode (read one packet only) */
 	    }
 	}
@@ -12348,7 +12378,7 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
      * that got that many messages or an SCTP socket that got that
      * many message fragments but still not the final
      */
-#if defined(HAVE_SCTP) && defined(USRSCTP)
+#if defined(HAVE_SCTP) && !defined(USRSCTP)
     if (short_recv) {
 	sock_select(desc, FD_READ, 1);
     }
@@ -12369,18 +12399,11 @@ static int packet_inet_output(udp_descriptor* udesc, HANDLE event)
     inet_descriptor* desc = INETP(udesc);
     int ret = 0;
     ErlDrvPort ix = desc->port;
-
     DEBUGF(("packet_inet_output(%ld) {s=%d\r\n", 
 	    (long)desc->port, desc->s));
 
     if (desc->state == INET_STATE_CONNECTING) {
-#ifdef HAVE_USRSCTP
-	if (IS_SCTP(desc)) {
-	    if (!desc->active)
-		sock_select(desc, FD_READ, 0);
-	} else
-#endif
-	    sock_select(desc, FD_CONNECT, 0);
+	sock_select(desc, FD_CONNECT, 0);
 
 	driver_cancel_timer(ix);  /* posssibly cancel a timer */
 #ifndef __WIN32__

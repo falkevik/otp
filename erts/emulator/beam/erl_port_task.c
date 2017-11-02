@@ -1622,7 +1622,10 @@ fail:
 
 #ifdef ERTS_SMP
     if (dhndl != ERTS_THR_PRGR_DHANDLE_MANAGED)
-	erts_port_dec_refc(pp);
+    {	
+	if(pp)
+	    erts_port_dec_refc(pp);
+    }
 #endif
 
     if (ns_pthlp)
