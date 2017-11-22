@@ -1188,6 +1188,7 @@ static int        packet_inet_init(void);
 static void       packet_inet_stop(ErlDrvData);
 static void       packet_inet_command(ErlDrvData, char*, ErlDrvSizeT);
 static void       packet_inet_drv_input(ErlDrvData data, ErlDrvEvent event);
+static void       packet_inet_drv_output(ErlDrvData data, ErlDrvEvent event);
 static ErlDrvData udp_inet_start(ErlDrvPort, char* command);
 #ifdef HAVE_SCTP
 static ErlDrvData sctp_inet_start(ErlDrvPort, char* command);
@@ -1249,7 +1250,7 @@ static struct erl_drv_entry sctp_inet_driver_entry =
     NULL, 
 #else
     packet_inet_drv_input,
-    NULL,
+    packet_inet_drv_output,
 #endif
     "sctp_inet",
     NULL,
@@ -1324,6 +1325,7 @@ typedef struct {
 
 
 static int packet_inet_input(udp_descriptor* udesc, HANDLE event);
+static int packet_inet_output(udp_descriptor* udesc, HANDLE event);
 #endif
 #ifdef HAVE_SCTP
 static int inet_sctp_send(udp_descriptor *udesc, char* buf, ErlDrvSizeT len);
@@ -3008,7 +3010,7 @@ static void usrsctp_event_rcv_callback(struct socket *sock, void *arg)
     }
 }
 
-static void usrsctp_event_rcv_callback(struct socket *sock, void *arg)
+static void usrsctp_event_snd_callback(struct socket *sock, void *arg)
 {
     struct usrsctp_driver_sock *drv_sock;
     inet_descriptor *desc;
@@ -3039,6 +3041,8 @@ static void usrsctp_setup_sock(struct socket *sock, inet_descriptor *desc)
     /* set socket fd to something different from INVALID_SOCKET */
     desc->s = -2;
     desc->recv_mtx = erl_drv_mutex_create("usrsctp_rcv");
+    desc->send_mtx = erl_drv_mutex_create("usrsctp_snd");
+    desc->send = 0;
 
     p_usrsctp_set_non_blocking(sock, 1);
     p_usrsctp_event_rcv_cb(sock, usrsctp_event_rcv_callback, NULL);
@@ -11502,15 +11506,15 @@ static int sctp_buf_sendmsg(udp_descriptor* udesc, char* ptr, ErlDrvSizeT len)
 	    if (!INETP(udesc)->is_ignored) {
 #		ifdef HAVE_USRSCTP
 		erl_drv_mutex_lock(INETP(udesc)->send_mtx);
-		if (!desc->send) {
-		    if (p_usrsctp_writeable(desc->usrsctp_sock)) {
-			driver_port_task_output_schedule(driver_erts_drvport2id(desc->port));
+		if (!INETP(udesc)->send) {
+		    if (p_usrsctp_writeable(INETP(udesc)->usrsctp_sock)) {
+			driver_port_task_output_schedule(driver_erts_drvport2id(ix));
 		    } 
 		    else {
-			desc->send = 1;
+			INETP(udesc)->send = 1;
 		    }
 		}
-		erl_drv_mutex_lock(desc->send_mtx);
+		erl_drv_mutex_lock(INETP(udesc)->send_mtx);
 #		else
 		sock_select(INETP(udesc),(FD_WRITE|FD_CLOSE), 1);
 #		endif
@@ -12391,12 +12395,14 @@ int inet_sctp_send(udp_descriptor *udesc, char* buf, ErlDrvSizeT len)
     struct sctp_sndinfo si;
 #else
     struct iovec  iov[1];		 /* For real data            */
+
     struct msghdr mhdr;		 /* Message wrapper          */
     struct sctp_sndrcvinfo *sri;     /* The actual ancilary data */
     union {                          /* For ancilary data        */
 	struct cmsghdr hdr;
 	char ancd[CMSG_SPACE(sizeof(*sri))];
     } cmsg;
+#endif
 
 #ifdef HAVE_USRSCTP
 	ptr = sctp_get_sendparams(&si, ptr);
