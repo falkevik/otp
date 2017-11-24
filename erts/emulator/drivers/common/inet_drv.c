@@ -3018,13 +3018,9 @@ static void usrsctp_event_snd_callback(struct socket *sock, void *arg)
 
     if (drv_sock) {
 	desc = drv_sock->desc;
-	erl_drv_mutex_lock(desc->send_mtx);
 	if(desc->send) {
-	    desc->send = 0;
-	    erl_drv_mutex_unlock(desc->send_mtx);
 	    driver_port_task_output_schedule(drv_sock->port);
-	} else
-	    erl_drv_mutex_unlock(desc->send_mtx);
+	}
     }
 }
 
@@ -3046,7 +3042,7 @@ static void usrsctp_setup_sock(struct socket *sock, inet_descriptor *desc)
 
     p_usrsctp_set_non_blocking(sock, 1);
     p_usrsctp_event_rcv_cb(sock, usrsctp_event_rcv_callback, NULL);
-    p_usrsctp_event_rcv_cb(sock, usrsctp_event_snd_callback, NULL);
+    p_usrsctp_event_snd_cb(sock, usrsctp_event_snd_callback, NULL);
     
     memset(&event, 0, sizeof(event));
     event.se_assoc_id = SCTP_ALL_ASSOC;
@@ -10375,7 +10371,6 @@ static void tcp_inet_timeout(ErlDrvData e)
     }
     DEBUGF(("tcp_inet_timeout(%ld) }\r\n", (long)desc->inet.port)); 
 }
-
 static void tcp_inet_multi_timeout(ErlDrvData e, ErlDrvTermData caller)
 {
     tcp_descriptor* desc = (tcp_descriptor*)e;
@@ -11477,6 +11472,7 @@ static int sctp_buf_sendmsg(udp_descriptor* udesc, char* ptr, ErlDrvSizeT len)
 		    (long)udesc->inet.port, udesc->inet.s));
 	    udesc->inet.state |= INET_F_BUSY;  /* mark for low-watermark */
 	    udesc->inet.busy_caller = udesc->inet.caller;
+	    INETP(udesc)->send=1;
 	    set_busy_port(udesc->inet.port, 1);
 	    if (udesc->send_timeout != INET_INFINITY) {
 		udesc->busy_on_send = 1;
@@ -11504,20 +11500,21 @@ static int sctp_buf_sendmsg(udp_descriptor* udesc, char* ptr, ErlDrvSizeT len)
 		(long)udesc->inet.port, udesc->inet.s));
 	    driver_enq(ix, ptr, len);
 	    if (!INETP(udesc)->is_ignored) {
-#		ifdef HAVE_USRSCTP
+#ifdef HAVE_USRSCTP
 		erl_drv_mutex_lock(INETP(udesc)->send_mtx);
 		if (!INETP(udesc)->send) {
 		    if (p_usrsctp_writeable(INETP(udesc)->usrsctp_sock)) {
+			erl_drv_mutex_unlock(INETP(udesc)->send_mtx);
 			driver_port_task_output_schedule(driver_erts_drvport2id(ix));
 		    } 
 		    else {
 			INETP(udesc)->send = 1;
+			erl_drv_mutex_unlock(INETP(udesc)->send_mtx);
 		    }
 		}
-		erl_drv_mutex_lock(INETP(udesc)->send_mtx);
-#		else
+#else
 		sock_select(INETP(udesc),(FD_WRITE|FD_CLOSE), 1);
-#		endif
+#endif
 	    }
 	}
     }
@@ -11929,7 +11926,7 @@ static ErlDrvData packet_inet_start(ErlDrvPort port, char* args, int protocol)
     desc->i_bufsz = 0;
     desc->high = INET_HIGH_WATERMARK;
     desc->low  = INET_LOW_WATERMARK;
-    desc->send_timeout = INET_INFINITY;
+    desc->send_timeout = 20000;
     desc->send_timeout_close = 0;
     desc->busy_on_send = 0;
     desc->i_buf = NULL;
@@ -12378,6 +12375,19 @@ static void packet_inet_timeout(ErlDrvData e)
 {
     udp_descriptor  * udesc = (udp_descriptor*) e;
     inet_descriptor * desc  = INETP(udesc);
+    int state = desc->state;
+    if ((state & INET_STATE_CONNECTED) == INET_STATE_CONNECTED) {
+	if (udesc->busy_on_send) {
+	    ASSERT(IS_BUSY(desc));
+	    desc->caller = desc->busy_caller;
+	    desc->state &= ~INET_F_BUSY;
+	    udesc->busy_on_send = 0;
+	    set_busy_port(desc->port, 0);
+	    inet_reply_error_am(desc, am_timeout);
+	}
+	return;
+    }
+
     if (!(desc->active))
 	sock_select(desc, FD_READ, 0);
     async_error_am (desc, am_timeout);
@@ -12452,8 +12462,8 @@ int inet_sctp_send(udp_descriptor *udesc, char* buf, ErlDrvSizeT len)
     /* Use send buffers ala TCP implementation if socket is STREAM */
     code = sock_sendmsg(desc->s, &mhdr, 0);
 #endif
-    
-    inet_output_count(desc, data_len);
+    if(code > 0)
+	inet_output_count(desc, data_len);
     
     return code;
 }
@@ -12800,7 +12810,6 @@ static int packet_inet_output(udp_descriptor* udesc, HANDLE event)
     inet_descriptor* desc = INETP(udesc);
     int ret = 0;
     ErlDrvPort ix = desc->port;
-
     DEBUGF(("packet_inet_output(%ld) {s=%d\r\n", 
 	    (long)desc->port, desc->s));
 
@@ -12812,6 +12821,7 @@ static int packet_inet_output(udp_descriptor* udesc, HANDLE event)
 
 	    if ((iov = driver_peekq(ix, &vsize)) == NULL) {
 #ifdef HAVE_USRSCTP
+		INETP(udesc)->send = 0;
 #else
 		sock_select(INETP(udesc), FD_WRITE, 0);
 #endif
