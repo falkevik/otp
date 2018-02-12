@@ -22,9 +22,14 @@
  *
  * ./a.out [-s [tag,][addr]:[port]]* [-d [tag,][addr]:[port]]* 
  *         [-r [tag,]proto]* -- program args
+ *	   [-t [tag,]proto]* -- program args
+ *	   [-T [tag,]proto]* -- program args
+ *	   [-z [tag,]proto]* -- program args
  *
  * Where: -s = stream socket, -d datagram socket and -r means raw socket.
- *
+ *        -t = raw ipv4 socket with ip headers
+ *        -T = raw ipv6 socket with ip headers
+ *	  -z = route socket
  */
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
@@ -197,7 +202,7 @@ void set_ipv6_pkt(int fd) {
 	return;
     }
 #endif
-#if defined(IPV6_PKTINFO)
+#if defined(IPV6_PKTINFO) && !defined(IPV6_RECVPKTINFO)
     if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO,(const void*)&on, sizeof(on)) < 0) {
 	perror("setsockopt IPV6_PKTINFO");
 	close(fd);
@@ -320,7 +325,7 @@ int main(argc, argv)
 	    }
 	    sltmp->iphdr = 0;
 	    sltmp->ipv6pkt = 1;
-	    sltmp->rtmo = 1;
+	    sltmp->rtmo = 0;
 	    sltmp->next = sl;
 	    sl = sltmp;
 	    count++;
