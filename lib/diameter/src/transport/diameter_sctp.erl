@@ -138,13 +138,18 @@
          pending = {0, queue:new()},
          opts      :: [[match()] | boolean() | diameter:eval()]}).
 
-open_child_spec(#open{id = Id} = T) ->
+open_child_spec(#open{id = Id0} = T) ->
+    Id = get_child_id(Id0),
     #{id => Id,
       start => {diameter_sctp, start_link, [T]},
       restart => temporary,
       shutdown => 1000,
       type => worker,
       modules => [diameter_sctp]}.
+
+get_child_id(Id) ->
+    {V, _ } = proplists:split(Id, [ip, port]),
+    lists:flatten(V).
 
 %% Field pending implements two queues: the first of transport-to-be
 %% processes to which an association has been assigned but for which
