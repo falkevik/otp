@@ -12051,15 +12051,17 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	    ErlDrvBinary* tmp;
 	    int bufsz;
 	    bufsz = desc->bufsz + (udesc->i_ptr - udesc->i_buf->orig_bytes);
-	    if ((tmp = realloc_buffer(udesc->i_buf, bufsz)) == NULL) {
-		release_buffer(udesc->i_buf);
-		udesc->i_buf = NULL;
-		return packet_error(udesc, ENOMEM);
-	    } else {
-		udesc->i_ptr =
-		    tmp->orig_bytes + (udesc->i_ptr - udesc->i_buf->orig_bytes);
-		udesc->i_buf = tmp;
-		udesc->i_bufsz = bufsz;
+	    if (bufsz != udesc->i_bufsz) {
+		if ((tmp = realloc_buffer(udesc->i_buf, bufsz)) == NULL) {
+		    release_buffer(udesc->i_buf);
+		    udesc->i_buf = NULL;
+		    return packet_error(udesc, ENOMEM);
+		} else {
+		    udesc->i_ptr =
+			tmp->orig_bytes + (udesc->i_ptr - udesc->i_buf->orig_bytes);
+		    udesc->i_buf = tmp;
+		    udesc->i_bufsz = bufsz;
+		}
 	    }
 	}
 
