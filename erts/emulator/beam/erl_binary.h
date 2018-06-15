@@ -419,6 +419,8 @@ erts_bin_realloc_fnf(Binary *bp, Uint size)
     ErtsAlcType_t type = (bp->intern.flags & BIN_FLAG_DRV) ? ERTS_ALC_T_DRV_BINARY
 	                                            : ERTS_ALC_T_BINARY;
     ASSERT((bp->intern.flags & BIN_FLAG_MAGIC) == 0);
+    if (bp->orig_size == size)
+	return bp;
     if (bsize < size) /* overflow */
 	return NULL;
     nbp = erts_realloc_fnf(type, (void *) bp, bsize);
@@ -436,6 +438,8 @@ erts_bin_realloc(Binary *bp, Uint size)
     ErtsAlcType_t type = (bp->intern.flags & BIN_FLAG_DRV) ? ERTS_ALC_T_DRV_BINARY
 	                                            : ERTS_ALC_T_BINARY;
     ASSERT((bp->intern.flags & BIN_FLAG_MAGIC) == 0);
+    if (bp->orig_size == size)
+	return bp;
     if (bsize < size) /* overflow */
 	erts_realloc_enomem(type, bp, size);
     nbp = erts_realloc_fnf(type, (void *) bp, bsize);
