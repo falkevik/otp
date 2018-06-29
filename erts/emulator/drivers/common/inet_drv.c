@@ -787,6 +787,7 @@ static size_t my_strnlen(const char *s, size_t maxlen)
 #define INET_LOPT_LINE_DELIM        40  /* Line delimiting char */
 #define INET_OPT_TCLASS             41  /* IPv6 transport class */
 #define INET_OPT_BIND_TO_DEVICE     42  /* get/set network device the socket is bound to */
+#define INET_LOPT_UDP_RCV_FLAGS     43  /* get/set network device the socket is bound to */
 /* SCTP options: a separate range, from 100: */
 #define SCTP_OPT_RTOINFO		100
 #define SCTP_OPT_ASSOCINFO		101
@@ -1290,6 +1291,7 @@ typedef struct {
     int i_bufsz;            /* current input buffer size */
     ErlDrvBinary* i_buf;    /* current binary buffer */
     char* i_ptr;            /* current pos in buf */
+    int	rcv_flags;
 } udp_descriptor;
 
 
@@ -1332,6 +1334,7 @@ static ErlDrvTermData am_ssl_tls;
 static ErlDrvTermData am_udp;
 static ErlDrvTermData am_udp_passive;
 static ErlDrvTermData am_udp_error;
+static ErlDrvTermData am_udp_trunc;
 #endif
 #ifdef HAVE_SYS_UN_H
 static ErlDrvTermData am_local;
@@ -3254,6 +3257,7 @@ inet_async_binary_data
     int aid;
     int req;
     int i = 0;
+    struct msghdr* mptr;
 #ifdef HAVE_SCTP
     int ok_pos;
 #endif
@@ -3275,11 +3279,13 @@ inet_async_binary_data
 #endif
     i = LOAD_ATOM(spec, i, am_ok);
 
+    /* mptr used for both SCTP (Ancillary Data) and UDP (trunc messages) */
+    mptr = (struct msghdr *) extra;
+
 #ifdef HAVE_SCTP
     if (IS_SCTP(desc))
     {	/* For SCTP we always have desc->hsz==0 (i.e., no application-level
 	   headers are used), so hsz==phsz (see above): */
-	struct msghdr* mptr;
 	int sz;
 	
 	ASSERT (hsz == phsz && hsz != 0);
@@ -3289,7 +3295,6 @@ inet_async_binary_data
 	i = LOAD_STRING(spec, i, bin->orig_bytes+offs, hsz);
 
 	/* Put in the list (possibly empty) of Ancillary Data: */
-	mptr = (struct msghdr *) extra;
 	i = sctp_parse_ancillary_data (spec, i, mptr);
 
 	/* Then: Data or Event (Notification)? */
@@ -3320,6 +3325,8 @@ inet_async_binary_data
 #endif  /* HAVE_SCTP */
     /* Generic case. Both Addr and Data (or a single list of them together) are
        returned: */
+    if (mptr->msg_flags & MSG_TRUNC)
+	    i = LOAD_ATOM(spec, i, am_udp_trunc);
 
     if ((desc->mode == INET_MODE_LIST) || (hsz > len)) {
 	/* INET_MODE_LIST => [H1,H2,...Hn] */
@@ -3332,6 +3339,11 @@ inet_async_binary_data
 	if (hsz > 0)
 	    i = LOAD_STRING_CONS(spec, i, bin->orig_bytes+offs, hsz);
     }
+
+    if (mptr->msg_flags & MSG_TRUNC)
+	/* Close up the {udp_trunc, Data} tuple */
+	i = LOAD_TUPLE(spec, i, 2);
+
     /* Close up the {ok, ...} or {error, ...} tuple: */
     i = LOAD_TUPLE(spec, i, 2);
 
@@ -3471,6 +3483,7 @@ static int packet_binary_message
     int i = 0;
     int alen;
     char* data = bin->orig_bytes+offs;
+    struct msghdr* mptr;
 
     DEBUGF(("packet_binary_message(%ld): len = %d\r\n",
 	   (long)desc->port, len));
@@ -3487,10 +3500,15 @@ static int packet_binary_message
     offs += alen;
     len  -= alen;
 
+    mptr = (struct msghdr *) extra;
+
 #   ifdef HAVE_SCTP
     if (!IS_SCTP(desc))
     {
 #   endif
+	if (mptr->msg_flags & MSG_TRUNC)
+	    i = LOAD_ATOM(spec, i, am_udp_trunc);
+
 	if ((desc->mode == INET_MODE_LIST) || (hsz > len))
 	    /* INET_MODE_LIST, or only headers => [H1,H2,...Hn] */
 	    i = LOAD_STRING(spec, i, bin->orig_bytes+offs, len);
@@ -3502,16 +3520,19 @@ static int packet_binary_message
 	    if (hsz > 0)
 		i = LOAD_STRING_CONS(spec, i, bin->orig_bytes+offs, hsz);
 	}
+
+	if (mptr->msg_flags & MSG_TRUNC)
+	    /* Close up the {udp_trunc, Data} tuple */
+	    i = LOAD_TUPLE(spec, i, 2);
+
 #   ifdef HAVE_SCTP
     }
     else
     {	/* For SCTP we always have desc->hsz==0 (i.e., no application-level
 	   headers are used): */
-	struct msghdr* mptr;
 	ASSERT(hsz == 0);
 
 	/* Put in the list (possibly empty) of Ancillary Data: */
-	mptr = (struct msghdr *) extra;
 	i = sctp_parse_ancillary_data (spec, i, mptr);
 
 	/* Then: Data or Event (Notification)? */
@@ -3892,6 +3913,7 @@ static int inet_init()
 #ifdef HAVE_UDP
     INIT_ATOM(udp_passive);
     INIT_ATOM(udp_error);
+    INIT_ATOM(udp_trunc);
 #endif
 #ifdef HAVE_SYS_UN_H
     INIT_ATOM(local);
@@ -6191,6 +6213,14 @@ static int inet_set_opts(inet_descriptor* desc, char* ptr, int len)
 		udesc->read_packets = ival;
 	    }
 	    continue;
+
+	case INET_LOPT_UDP_RCV_FLAGS:
+	    if (desc->stype == SOCK_DGRAM) {
+		udp_descriptor* udesc = (udp_descriptor*) desc;
+		if (ival < 0) return -1;
+		udesc->rcv_flags = ival;
+	    }
+	    continue;
 #endif
 
 #ifdef HAVE_SETNS
@@ -7246,6 +7276,16 @@ static ErlDrvSSizeT inet_fill_opts(inet_descriptor* desc,
 	    if (desc->stype == SOCK_DGRAM) {
 		*ptr++ = opt;
 		ival = ((udp_descriptor*)desc)->read_packets;
+		put_int32(ival, ptr);
+	    } else {
+		TRUNCATE_TO(0,ptr);
+	    }
+	    continue;
+
+	case INET_LOPT_UDP_RCV_FLAGS:
+	    if (desc->stype == SOCK_DGRAM) {
+		*ptr++ = opt;
+		ival = ((udp_descriptor*)desc)->rcv_flags;
 		put_int32(ival, ptr);
 	    } else {
 		TRUNCATE_TO(0,ptr);
@@ -11462,6 +11502,8 @@ static ErlDrvData packet_inet_start(ErlDrvPort port, char* args, int protocol)
     desc->i_bufsz = 0;
     desc->i_buf = NULL;
     desc->i_ptr = NULL;
+    desc->rcv_flags = 0;
+
     return drvd;
 }
 
@@ -12028,9 +12070,9 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
     char abuf[sizeof(inet_address)];  /* buffer address; enough??? */
     int packet_count = udesc->read_packets;
     int count = 0;     /* number of packets delivered to owner */
-#ifdef HAVE_SCTP
     struct msghdr mhdr;	  	     /* Top-level msg structure    */
     struct iovec  iov[1]; 	     /* Data or Notification Event */
+#ifdef HAVE_SCTP
     char   ancd[SCTP_ANC_BUFF_SIZE]; /* Ancillary Data		   */
     int short_recv = 0;
 #endif
@@ -12069,7 +12111,7 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	if (IS_SCTP(desc)) {
 	    iov->iov_base = udesc->i_ptr; /* Data will come here    */
 	    iov->iov_len = desc->bufsz; /* Remaining buffer space */
-	    
+
 	    mhdr.msg_name	= &other; /* Peer addr comes into "other" */
 	    mhdr.msg_namelen	= len;
 	    mhdr.msg_iov	= iov;
@@ -12077,7 +12119,7 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	    mhdr.msg_control	= ancd;
 	    mhdr.msg_controllen	= SCTP_ANC_BUFF_SIZE;
 	    mhdr.msg_flags	= 0;	   /* To be filled by "recvmsg"    */
-	    
+
 	    /* Do the actual SCTP receive: */
 	    n = sock_recvmsg(desc->s, &mhdr, 0);
 	    len = mhdr.msg_namelen;
@@ -12090,8 +12132,26 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	    other = desc->remote;
 	    goto check_result;
 	}
-	n = sock_recvfrom(desc->s, udesc->i_ptr, desc->bufsz,
-			  0, &other.sa, &len);
+
+	iov->iov_base = udesc->i_ptr; /* Data will come here    */
+	iov->iov_len = desc->bufsz; /* Remaining buffer space */
+
+	mhdr.msg_name	= &other; /* Peer addr comes into "other" */
+	mhdr.msg_namelen	= len;
+	mhdr.msg_iov	= iov;
+	mhdr.msg_iovlen	= 1;
+	mhdr.msg_controllen = 0;
+	mhdr.msg_flags	= 0;	   /* To be filled by "recvmsg"    */
+
+	/* Do the actual UDP receive */
+	n = sock_recvmsg(desc->s, &mhdr, 0);
+	len = mhdr.msg_namelen;
+
+	/* reset the flags unless details are asked for,
+	   used later if trunc indication should be sent or not */
+	if (!udesc->rcv_flags)
+	    mhdr.msg_flags = 0;
+
     check_result:
 	/* Analyse the result: */
 	if (IS_SOCKET_ERROR(n)) {
@@ -12134,7 +12194,6 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 	{
 	    /* message received */
 	    int code;
-	    void * extra = NULL;
 	    char * ptr;
 	    int nsz;
 
@@ -12165,16 +12224,16 @@ static int packet_inet_input(udp_descriptor* udesc, HANDLE event)
 		    udesc->i_ptr = NULL;  /* not used from here */
 		}
 	    }
-#ifdef HAVE_SCTP
-	    if (IS_SCTP(desc)) extra = &mhdr;
-#endif
+
 	    /* Actual parsing and return of the data received, occur here: */
 	    code = packet_reply_binary_data(desc, len, udesc->i_buf,
 					    (sizeof(other) - len),
 					    nsz,
-					    extra);
+					    &mhdr);
+
 	    free_buffer(udesc->i_buf);
 	    udesc->i_buf = NULL;
+
 	    if (code < 0)
 		return count;
 	    count++;

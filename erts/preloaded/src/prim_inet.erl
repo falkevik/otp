@@ -623,6 +623,13 @@ recvfrom0(S, Length, Time)
 			{{IP, Port}, Data} ->
 			    {ok, {IP, Port, Data}}
 		    end;
+		{inet_async, S, Ref, {ok, {udp_trunc, [F | AddrData]}}} ->
+		    case get_addr(F, AddrData) of
+			{{Family, _} = Addr, Data} when is_atom(Family) ->
+			    {ok, {Addr, 0, {udp_trunc, Data}}};
+			{{IP, Port}, Data} ->
+			    {ok, {IP, Port, {udp_trunc, Data}}}
+		    end;
 
 		% Success, SCTP:
 		{inet_async, S, Ref, {ok, {[F,P1,P0 | Addr], AncData, DE}}} ->
@@ -1284,6 +1291,7 @@ enc_opt(show_econnreset) -> ?INET_LOPT_TCP_SHOW_ECONNRESET;
 enc_opt(line_delimiter)  -> ?INET_LOPT_LINE_DELIM;
 enc_opt(raw)             -> ?INET_OPT_RAW;
 enc_opt(bind_to_device)  -> ?INET_OPT_BIND_TO_DEVICE;
+enc_opt(rcv_flags)	 -> ?INET_LOPT_RCV_FLAGS;
 % Names of SCTP opts:
 enc_opt(sctp_rtoinfo)	 	   -> ?SCTP_OPT_RTOINFO;
 enc_opt(sctp_associnfo)	 	   -> ?SCTP_OPT_ASSOCINFO;
@@ -1345,6 +1353,7 @@ dec_opt(?INET_LOPT_TCP_SHOW_ECONNRESET) -> show_econnreset;
 dec_opt(?INET_LOPT_LINE_DELIM)      -> line_delimiter;
 dec_opt(?INET_OPT_RAW)              -> raw;
 dec_opt(?INET_OPT_BIND_TO_DEVICE) -> bind_to_device;
+dec_opt(?INET_LOPT_RCV_FLAGS)	  -> rcv_flags;
 dec_opt(I) when is_integer(I)     -> undefined.
 
 
@@ -1550,6 +1559,7 @@ type_opt_1(sctp_delayed_ack_time) ->
 	assoc_id    = [[sctp_assoc_id,0]],
 	assoc_value = [uint32,0]}}];
 %%
+type_opt_1(rcv_flags)	      -> bool;
 type_opt_1(undefined)         -> undefined;
 type_opt_1(O) when is_atom(O) -> undefined.
 

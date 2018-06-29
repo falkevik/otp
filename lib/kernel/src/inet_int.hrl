@@ -157,6 +157,7 @@
 -define(INET_LOPT_LINE_DELIM,     40).
 -define(INET_OPT_TCLASS,          41).
 -define(INET_OPT_BIND_TO_DEVICE,  42).
+-define(INET_LOPT_RCV_FLAGS,	  43).
 % Specific SCTP options: separate range:
 -define(SCTP_OPT_RTOINFO,	 	100).
 -define(SCTP_OPT_ASSOCINFO,	 	101).
