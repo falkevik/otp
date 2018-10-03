@@ -29,7 +29,8 @@
 
 %% API
 -export([start/0, start/1, initialize/2, send_data/2, send_alert/2, renegotiate/1,
-         update_connection_state/3, dist_tls_socket/1, dist_handshake_complete/3]).
+         update_connection_state/3, dist_tls_socket/1, dist_handshake_complete/3,
+	 setopts/2]).
 
 %% gen_statem callbacks
 -export([callback_mode/0, init/1, terminate/3, code_change/4]).
@@ -122,6 +123,12 @@ dist_handshake_complete(ConnectionPid, Node, DHandle) ->
 %%--------------------------------------------------------------------
 dist_tls_socket(Pid) ->
     gen_statem:call(Pid, dist_get_tls_socket).
+%%--------------------------------------------------------------------
+-spec setopts(pid(), Options::[{term(), term()}]) -> ok.
+%%  Description: set socket options for already established connection 
+%%--------------------------------------------------------------------
+setopts(Pid, Options) ->
+    gen_statem:call(Pid, {setopts, Options}).
 
 %%%===================================================================
 %%% gen_statem callbacks
@@ -207,6 +214,10 @@ connection({call, From}, {dist_handshake_complete, _Node, DHandle}, #data{connec
     process_flag(priority, normal),
     Events = dist_data_events(DHandle, []),
     {next_state, ?FUNCTION_NAME, StateData#data{dist_handle = DHandle}, [{reply, From, ok} | Events]};
+connection({call, From}, {setopts, Options},
+	   #data{socket_options = SockOpts} = StateData) ->
+    {Res, NSockOpts} = set_socket_opts(Options, SockOpts),
+    {next_state, ?FUNCTION_NAME, StateData#data{socket_options=NSockOpts}, [{reply, From, Res}]};
 connection(cast, #alert{} = Alert, StateData0) ->
     StateData = send_tls_alert(Alert, StateData0),
     {next_state, ?FUNCTION_NAME, StateData};
@@ -395,3 +406,32 @@ consume_ticks() ->
     after 0 -> 
             ok
     end.
+
+set_socket_opts([], SockOpts) ->
+    {ok, SockOpts};
+set_socket_opts([{mode, Mode}| Opts], SockOpts)
+  when Mode == list; Mode == binary ->
+    set_socket_opts(Opts, 
+		    SockOpts#socket_options{mode = Mode});
+set_socket_opts([{packet, Packet}| Opts], SockOpts) 
+  when Packet == raw;
+       Packet == 0;
+       Packet == 1;
+       Packet == 2;
+       Packet == 4;
+       Packet == asn1;
+       Packet == cdr;
+       Packet == sunrm;
+       Packet == fcgi;
+       Packet == tpkt;
+       Packet == line;
+       Packet == http;
+       Packet == httph;
+       Packet == http_bin;
+       Packet == httph_bin ->
+    set_socket_opts(Opts, SockOpts#socket_options{packet = Packet});
+set_socket_opts([{header, Header}| Opts], SockOpts) 
+  when is_integer(Header) ->
+    set_socket_opts(Opts, SockOpts#socket_options{header = Header});
+set_socket_opts([_|Opts], SockOpts) ->
+    set_socket_opts(Opts, SockOpts).

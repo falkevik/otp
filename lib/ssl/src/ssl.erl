@@ -604,6 +604,18 @@ getopts(#sslsocket{}, OptionTags) ->
 %%
 %% Description: Sets options
 %%--------------------------------------------------------------------
+setopts(#sslsocket{pid = [Pid, Sender|_]}, Options0) when is_pid(Pid),
+							  is_pid(Sender),
+							  is_list(Options0)  ->
+    try proplists:expand([{binary, [{mode, binary}]},
+			  {list, [{mode, list}]}], Options0) of
+	Options ->
+	    ssl_connection:set_opts(Pid, Options),
+	    tls_sender:setopts(Sender, Options)
+    catch
+	_:_ ->
+	    {error, {options, {not_a_proplist, Options0}}}
+    end;
 setopts(#sslsocket{pid = [Pid|_]}, Options0) when is_pid(Pid), is_list(Options0)  ->
     try proplists:expand([{binary, [{mode, binary}]},
 			  {list, [{mode, list}]}], Options0) of
