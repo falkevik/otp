@@ -797,11 +797,12 @@ static ErlDrvSSizeT fd_control(ErlDrvData drv_data,
 			       char *buf, ErlDrvSizeT len,
 			       char **rbuf, ErlDrvSizeT rlen)
 {
-    int fd = (int)(long)drv_data;
+    ErtsSysDriverData *esfd= (ErtsSysDriverData *) drv_data;
     char resbuff[2*sizeof(Uint32)];
     switch (command) {
     case FD_CTRL_OP_GET_WINSIZE:
 	{
+	    int fd = esfd->ofd->fd;
 	    Uint32 w,h;
 	    if (fd_get_window_size(fd,&w,&h)) 
 		return 0;
