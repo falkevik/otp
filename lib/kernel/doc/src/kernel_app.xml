@@ -108,6 +108,8 @@
                   <item><p>Stop process</p></item>
                   <tag><c>sigtstp</c></tag>
                   <item><p>Stop typed at terminal</p></item>
+                  <tag><c>sigwinch</c></tag>
+                  <item><p>Terminal window size change</p></item>
               </taglist>
 
               <p>Setting OS signals are described in <seealso marker="os#set_signal/2"><c>os:set_signal/2</c></seealso>.</p>

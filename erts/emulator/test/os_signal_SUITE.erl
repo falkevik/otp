@@ -41,7 +41,8 @@
          t_sigterm/1,
          t_sigalrm/1,
          t_sigchld/1,
-         t_sigchld_fork/1]).
+         t_sigchld_fork/1,
+	 t_sigwinch/1]).
 
 -define(signal_server, erl_signal_server).
 
@@ -59,7 +60,8 @@ all() ->
               t_sigterm,
               t_sigalrm,
               t_sigchld,
-              t_sigchld_fork]
+              t_sigchld_fork,
+	      t_sigwinch]
     end.
 
 init_per_testcase(Func, Config) when is_atom(Func), is_list(Config) ->
@@ -91,7 +93,8 @@ set_unset(_Config) ->
                sigalrm, sigterm,
                sigusr1, sigusr2,
                sigchld,
-               sigstop, sigtstp],
+               sigstop, sigtstp,
+	       sigwinch],
     F1 = fun(Sig) -> ok = os:set_signal(Sig,handle) end,
     F2 = fun(Sig) -> ok = os:set_signal(Sig,default) end,
     F3 = fun(Sig) -> ok = os:set_signal(Sig,ignore) end,
@@ -287,6 +290,30 @@ t_sigchld_fork(_Config) ->
     42 = Status,
     %% reset to ignore (it's the default)
     os:set_signal(sigchld, ignore),
+    ok.
+
+t_sigwinch(_Config) ->
+    Pid1 = setup_service(),
+    OsPid = os:getpid(),
+    os:set_signal(sigwinch, handle),
+    ok = kill("WINCH", OsPid),
+    ok = kill("WINCH", OsPid),
+    ok = kill("WINCH", OsPid),
+    Msgs1 = fetch_msgs(Pid1),
+    io:format("Msgs1: ~p~n", [Msgs1]),
+    [{notify,sigwinch},
+     {notify,sigwinch},
+     {notify,sigwinch}] = Msgs1,
+    %% ignore
+    Pid2 = setup_service(),
+    os:set_signal(sigwinch, ignore),
+    ok = kill("WINCH", OsPid),
+    ok = kill("WINCH", OsPid),
+    ok = kill("WINCH", OsPid),
+    Msgs2 = fetch_msgs(Pid2),
+    io:format("Msgs2: ~p~n", [Msgs2]),
+    [] = Msgs2,
+    %% ignore is the default
     ok.
 
 

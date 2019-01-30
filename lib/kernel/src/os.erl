@@ -105,7 +105,7 @@ unset_env_var(_) ->
 -spec set_signal(Signal, Option) -> 'ok' when
       Signal :: 'sighup'  | 'sigquit' | 'sigabrt' | 'sigalrm' |
                 'sigterm' | 'sigusr1' | 'sigusr2' | 'sigchld' |
-                'sigstop' | 'sigtstp',
+                'sigstop' | 'sigtstp' | 'sigwinch',
       Option :: 'default' | 'handle' | 'ignore'.
 
 set_signal(_Signal, _Option) ->
