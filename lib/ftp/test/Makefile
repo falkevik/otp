@@ -101,6 +101,7 @@ MODULES =                 		\
 	erl_make_certs                  \
 	ftp_SUITE 	  		\
 	ftp_format_SUITE                \
+	ftp_stub_SUITE                \
 	ftp_test_lib
 
 
