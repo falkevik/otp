@@ -185,6 +185,8 @@
 -type ancillary_data() ::
         [ {'tos', byte()} | {'tclass', byte()} | {'ttl', byte()} ].
 
+-type iopts() :: #{numbers => true | false, fields => [atom()]}.
+
 %%% ---------------------------------
 
 -spec get_rc() -> [{Par :: atom(), Val :: any()} |
@@ -1551,25 +1553,33 @@ fdopen(Fd, Addr, Port, Opts, Protocol, Family, Type, Module) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%  socket stat
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-define(default_opts,
+	#{fields => [port, module, recv, sent, owner,
+		     local_address, foreign_address,
+		     state, type]}).
 
 -spec i() -> ok.
-i() -> i(tcp), i(udp), i(sctp).
+i() -> i(tcp, ?default_opts), i(udp, ?default_opts), i(sctp, ?default_opts).
 
--spec i(socket_protocol()) -> ok.
-i(Proto) -> i(Proto, [port, module, recv, sent, owner,
-		      local_address, foreign_address, state, type]).
+-spec i(socket_protocol() | iopts()) -> ok.
+i(Opts) when is_map(Opts) ->
+    NOpts = maps:merge(?default_opts, Opts),
+    i(tcp, NOpts), i(udp, NOpts), i(sctp, NOpts);
+i(Proto) when is_atom(Proto) ->
+    i(Proto, ?default_opts).
 
--spec i(socket_protocol(), [atom()]) -> ok.
-i(tcp, Fs) ->
-    ii(tcp_sockets(), Fs, tcp);
-i(udp, Fs) ->
-    ii(udp_sockets(), Fs, udp);
-i(sctp, Fs) ->
-    ii(sctp_sockets(), Fs, sctp).
+-spec i(socket_protocol(), iopts()) -> ok.
+i(tcp, Opts) ->
+    ii(tcp_sockets(), Opts#{proto => tcp});
+i(udp, Opts) ->
+    ii(udp_sockets(), Opts#{proto => udp});
+i(sctp, Opts) ->
+    ii(sctp_sockets(), Opts#{proto => sctp}).
 
-ii(Ss, Fs, Proto) ->
+ii(Ss, Opts) ->
+    Fs = maps:get(fields, Opts),
     LLs =
-	case info_lines(Ss, Fs, Proto) of
+	case info_lines(Ss, Opts) of
 	    [] -> [];
 	    InfoLines -> [h_line(Fs) | InfoLines]
 	end,
@@ -1584,8 +1594,11 @@ smax([Max|Ms], [Str|Strs]) ->
     [if N > Max -> N; true -> Max end | smax(Ms, Strs)];
 smax([], []) -> [].
 
-info_lines(Ss, Fs, Proto) -> [i_line(S, Fs,Proto) || S <- Ss].
-i_line(S, Fs, Proto)      -> [info(S, F, Proto) || F <- Fs].
+info_lines(Ss, Opts) -> [i_line(S, Opts) || S <- Ss].
+
+i_line(S, Opts) ->
+    {Fs, RemOpts} = maps:take(fields, Opts),
+    [info(S, F, RemOpts) || F <- Fs].
 
 h_line(Fs) -> [h_field(atom_to_list(F)) || F <- Fs].
 
@@ -1599,7 +1612,7 @@ upper(C) when C >= $a, C =< $z -> (C-$a) + $A;
 upper(C) -> C.
 
     
-info(S, F, Proto) ->
+info(S, F, Opts) ->
     case F of
 	owner ->
 	    case erlang:port_info(S, connected) of
@@ -1622,9 +1635,9 @@ info(S, F, Proto) ->
 		_ -> " "
 	    end;
 	local_address ->
-	    fmt_addr(prim_inet:sockname(S), Proto);
+	    fmt_addr(prim_inet:sockname(S), Opts);
 	foreign_address ->
-	    fmt_addr(prim_inet:peername(S), Proto);
+	    fmt_addr(prim_inet:peername(S), Opts);
 	state ->
 	    case prim_inet:getstatus(S) of
 		{ok,Status} -> fmt_status(Status);
@@ -1697,20 +1710,22 @@ fmt_status3(X) when is_atom(X) ->
     string:uppercase(atom_to_list(X)).
 
 
-fmt_addr({error,enotconn}, _) -> "*:*";
-fmt_addr({error,_}, _)        -> " ";
-fmt_addr({ok,Addr}, Proto) ->
+fmt_addr({error,enotconn}, _Opts) -> "*:*";
+fmt_addr({error,_}, _Opts)        -> " ";
+fmt_addr({ok,Addr}, Opts) ->
     case Addr of
 	%%Dialyzer {0,0}            -> "*:*";
-	{{0,0,0,0},Port} -> "*:" ++ fmt_port(Port, Proto);
-	{{0,0,0,0,0,0,0,0},Port} -> "*:" ++ fmt_port(Port, Proto);
-	{{127,0,0,1},Port} -> "localhost:" ++ fmt_port(Port, Proto);
-	{{0,0,0,0,0,0,0,1},Port} -> "localhost:" ++ fmt_port(Port, Proto);
+	{{0,0,0,0},Port} -> "*:" ++ fmt_port(Port, Opts);
+	{{0,0,0,0,0,0,0,0},Port} -> "*:" ++ fmt_port(Port, Opts);
+	{{127,0,0,1},Port} -> "localhost:" ++ fmt_port(Port, Opts);
+	{{0,0,0,0,0,0,0,1},Port} -> "localhost:" ++ fmt_port(Port, Opts);
 	{local, Path} -> "local:" ++ binary_to_list(Path);
-	{IP,Port} -> inet_parse:ntoa(IP) ++ ":" ++ fmt_port(Port, Proto)
+	{IP,Port} -> inet_parse:ntoa(IP) ++ ":" ++ fmt_port(Port, Opts)
     end.
 
-fmt_port(N, Proto) ->
+fmt_port(N, #{numbers := true}) ->
+    integer_to_list(N);
+fmt_port(N, #{proto := Proto}) ->
     case inet:getservbyport(N, Proto) of
 	{ok, Name} -> Name;
 	_ -> integer_to_list(N)

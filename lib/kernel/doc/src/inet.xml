@@ -339,6 +339,9 @@ fe80::204:acff:fe17:bf38
     <datatype>
       <name name="stat_option"/>
     </datatype>
+    <datatype>
+      <name name="iopts"/>
+    </datatype>
   </datatypes>
 
   <funcs>
