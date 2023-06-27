@@ -1101,8 +1101,16 @@ do_emit([]) ->
 do_emit(What) when is_integer(What) ->
     integer_to_list(What);
 do_emit(What) when is_atom(What) ->
-    atom_to_list(What).
+    atom_to_list(What);
+do_emit({Min, Max}) ->
+    ["{", to_list(Min), ",", to_list(Max), "}"].
 
+to_list(I) when is_integer(I) ->
+    integer_to_list(I);
+to_list(F) when is_float(F) ->
+    float_to_list(F);
+to_list(A) when is_atom(A) ->
+    ["'",atom_to_list(A),"'"].
 
 call_args([A|As], Sep) ->
     [Sep,do_emit(A)|call_args(As, ", ")];

@@ -28,6 +28,7 @@
 -export([encode_boolean/2,decode_boolean/2,
 	 encode_integer/2,encode_integer/3,
 	 decode_integer/2,
+	 decode_integer/3,
 	 number2name/2,
 	 encode_unnamed_bit_string/2,encode_unnamed_bit_string/3,
 	 encode_named_bit_string/3,encode_named_bit_string/4,
@@ -697,6 +698,15 @@ encode_integer_neg(N, Acc) ->
 %%===============================================================================
 %% decode integer
 %%===============================================================================
+
+decode_integer(Tlv, TagIn, {0, Max}) ->
+    Bin = match_tags(Tlv, TagIn),
+    Len = byte_size(Bin),
+    <<Int:Len/unsigned-unit:8>> = Bin,
+    Int;
+
+decode_integer(Tlv, TagIn, {_Min, _Max}) ->
+    decode_integer(Tlv, TagIn).
 
 decode_integer(Tlv, TagIn) ->
     Bin = match_tags(Tlv, TagIn),

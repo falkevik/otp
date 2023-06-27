@@ -674,8 +674,14 @@ check_constraint(F, Args, Constr, PreConstr0, ReturnVal0) ->
 	_ ->
 	    %% There is a constraint.
 	    asn1ct_name:new(val),
-	    emit(["begin",nl,
-		  {curr,val}," = ",{call,ber,F,Args},com,nl]),
+	    case F of
+		decode_integer ->
+		    emit(["begin",nl,
+			  {curr,val}," = ",{call,ber,F,Args ++ [Constr]},com,nl]);
+		_ ->
+		    emit(["begin",nl,
+			  {curr,val}," = ",{call,ber,F,Args},com,nl])
+	    end,
 	    PreVal0 = asn1ct_gen:mk_var(asn1ct_name:curr(val)),
 	    PreVal = PreConstr(PreVal0),
 	    emit("if "),
