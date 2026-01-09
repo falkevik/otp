@@ -145,6 +145,7 @@
          aes_128_ctr/1,
          aes_128_ecb/1,
          aes_128_gcm/1,
+         aes_128_gcm_siv/1,
          aes_128_ofb/1,
          aes_192_cbc/1,
          aes_192_ccm/1,
@@ -153,6 +154,7 @@
          aes_192_ctr/1,
          aes_192_ecb/1,
          aes_192_gcm/1,
+         aes_192_gcm_siv/1,
          aes_192_ofb/1,
          aes_256_cbc/1,
          aes_256_ccm/1,
@@ -161,6 +163,7 @@
          aes_256_ctr/1,
          aes_256_ecb/1,
          aes_256_gcm/1,
+         aes_256_gcm_siv/1,
          aes_256_ofb/1,
          aes_cbc/1,
          aes_cbc128/1,
@@ -310,6 +313,9 @@ groups() ->
                      {group, aes_128_gcm},
                      {group, aes_192_gcm},
                      {group, aes_256_gcm},
+                     {group, aes_128_gcm_siv},
+                     {group, aes_192_gcm_siv},
+                     {group, aes_256_gcm_siv},
                      {group, des_ede3_cbc},
                      {group, des_ede3_cfb},
                      {group, aes_128_cfb128},
@@ -500,26 +506,29 @@ groups() ->
                                 ]},
 
      %% New cipher nameing schema
-     {des_ede3_cbc, [], [api_ng, api_ng_one_shot]},
-     {des_ede3_cfb, [], [api_ng, api_ng_one_shot]},
-     {aes_128_cbc,  [], [api_ng, api_ng_one_shot, cmac, cmac_update]},
-     {aes_192_cbc,  [], [api_ng, api_ng_one_shot, cmac, cmac_update]},
-     {aes_256_cbc,  [], [api_ng, api_ng_one_shot, cmac, cmac_update]},
-     {aes_128_ctr,  [], [api_ng, api_ng_one_shot]},
-     {aes_192_ctr,  [], [api_ng, api_ng_one_shot]},
-     {aes_256_ctr,  [], [api_ng, api_ng_one_shot]},
-     {aes_128_ccm,  [], [aead_ng, aead_bad_tag]},
-     {aes_192_ccm,  [], [aead_ng, aead_bad_tag]},
-     {aes_256_ccm,  [], [aead_ng, aead_bad_tag]},
-     {aes_128_ecb,  [], [api_ng, api_ng_one_shot]},
-     {aes_192_ecb,  [], [api_ng, api_ng_one_shot]},
-     {aes_256_ecb,  [], [api_ng, api_ng_one_shot]},
-     {aes_128_gcm,  [], [aead_ng, aead_bad_tag]},
-     {aes_192_gcm,  [], [aead_ng, aead_bad_tag]},
-     {aes_256_gcm,  [], [aead_ng, aead_bad_tag]},
-     {aes_128_ofb,  [], [api_ng, api_ng_one_shot]},
-     {aes_192_ofb,  [], [api_ng, api_ng_one_shot]},
-     {aes_256_ofb,  [], [api_ng, api_ng_one_shot]}
+     {des_ede3_cbc,    [], [api_ng, api_ng_one_shot]},
+     {des_ede3_cfb,    [], [api_ng, api_ng_one_shot]},
+     {aes_128_cbc,     [], [api_ng, api_ng_one_shot, cmac, cmac_update]},
+     {aes_192_cbc,     [], [api_ng, api_ng_one_shot, cmac, cmac_update]},
+     {aes_256_cbc,     [], [api_ng, api_ng_one_shot, cmac, cmac_update]},
+     {aes_128_ctr,     [], [api_ng, api_ng_one_shot]},
+     {aes_192_ctr,     [], [api_ng, api_ng_one_shot]},
+     {aes_256_ctr,     [], [api_ng, api_ng_one_shot]},
+     {aes_128_ccm,     [], [aead_ng, aead_bad_tag]},
+     {aes_192_ccm,     [], [aead_ng, aead_bad_tag]},
+     {aes_256_ccm,     [], [aead_ng, aead_bad_tag]},
+     {aes_128_ecb,     [], [api_ng, api_ng_one_shot]},
+     {aes_192_ecb,     [], [api_ng, api_ng_one_shot]},
+     {aes_256_ecb,     [], [api_ng, api_ng_one_shot]},
+     {aes_128_gcm,     [], [aead_ng, aead_bad_tag]},
+     {aes_192_gcm,     [], [aead_ng, aead_bad_tag]},
+     {aes_256_gcm,     [], [aead_ng, aead_bad_tag]},
+     {aes_128_gcm_siv, [], [aead_ng, aead_bad_tag]},
+     {aes_192_gcm_siv, [], [aead_ng, aead_bad_tag]},
+     {aes_256_gcm_siv, [], [aead_ng, aead_bad_tag]},
+     {aes_128_ofb,     [], [api_ng, api_ng_one_shot]},
+     {aes_192_ofb,     [], [api_ng, api_ng_one_shot]},
+     {aes_256_ofb,     [], [api_ng, api_ng_one_shot]}
     ].
 
 %%-------------------------------------------------------------------
@@ -1594,6 +1603,7 @@ cipher_info_prop_aead_attr(Config) when is_list(Config) ->
     %% Taken from type crypto:cipher_aead()
     AeadCiphers = sets:from_list([aes_128_ccm, aes_192_ccm, aes_256_ccm, aes_ccm,
                                   aes_128_gcm, aes_192_gcm, aes_256_gcm, aes_gcm,
+                                  aes_128_gcm_siv, aes_192_gcm_siv, aes_256_gcm_siv,
                                   sm4_gcm, sm4_ccm, chacha20_poly1305]),
     SupportedAeadCiphers = sets:intersection(AeadCiphers, SupportedCiphers),
     ct:log("Checking ~b/~b AEAD Ciphers: ~p",
@@ -3838,6 +3848,20 @@ aes_256_gcm(Config) ->
             ["gcmDecrypt256.rsp",
              "gcmEncryptExtIV256.rsp"]).
 
+aes_128_gcm_siv(Config) ->
+   read_rsp(Config, aes_128_gcm_siv,
+            ["gcmSivDecrypt128.rsp",
+             "gcmSivEncryptExtIV128.rsp"]).
+
+aes_192_gcm_siv(Config) ->
+   read_rsp(Config, aes_192_gcm_siv,
+            ["gcmSivDecrypt192.rsp",
+             "gcmSivEncryptExtIV192.rsp"]).
+
+aes_256_gcm_siv(Config) ->
+   read_rsp(Config, aes_256_gcm_siv,
+            ["gcmSivDecrypt256.rsp",
+             "gcmSivEncryptExtIV256.rsp"]).
 
 aes_ccm(Config) ->
     %% RETIRED aes_*_ccm
