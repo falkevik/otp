@@ -166,7 +166,11 @@ static struct cipher_type_t cipher_types[] =
     {{"aes_192_ccm"}, "aes-192-ccm", {NULL}, 24, AEAD_CIPHER|CCM_MODE, {{0,0,0}}},
     {{"aes_256_ccm"}, "aes-256-ccm", {NULL}, 32, AEAD_CIPHER|CCM_MODE, {{0,0,0}}},
 #endif
-
+#if defined(HAVE_GCM_SIV)
+    {{"aes_128_gcm_siv"}, "aes-128-gcm-siv", {NULL}, 16, AEAD_CIPHER|GCM_SIV_MODE, AEAD_CTRL},
+    {{"aes_192_gcm_siv"}, "aes-192-gcm-siv", {NULL}, 24, AEAD_CIPHER|GCM_SIV_MODE, AEAD_CTRL},
+    {{"aes_256_gcm_siv"}, "aes-256-gcm-siv", {NULL}, 32, AEAD_CIPHER|GCM_SIV_MODE, AEAD_CTRL},
+#endif
     /*==== End of list ==== */
 
     {{NULL},NULL,{NULL},0,0,NOT_AEAD}

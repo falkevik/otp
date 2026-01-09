@@ -276,10 +276,17 @@ ERL_NIF_TERM aead_cipher_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
             {ret = EXCP_ERROR(env, "Can't set text size"); goto done;}
     } else
 #endif
-        { /* GCM_MODE or CHACHA20_POLY1305 */
+        { /* GCM_MODE, CHACHA20_POLY1305 or GCM_SIV_MODE */
             /* Set key and iv */
             if (EVP_CipherInit_ex(ctx, NULL, NULL, key.data, iv.data, -1) != 1)
                 {ret = EXCP_ERROR(env, "Can't set key and iv"); goto done;}
+#if defined(HAVE_GCM_SIV)
+            /* For GCM-SIV decryption, set the tag BEFORE EVP_CipherUpdate */
+            if (!encflg && (cipherp->flags & GCM_SIV_MODE)) {
+                if (EVP_CIPHER_CTX_ctrl(ctx, cipherp->extra.aead.ctx_ctrl_set_tag, (int)tag_len, tag_data) != 1)
+                    {ret = EXCP_BADARG_N(env, 5, "Can't set tag"); goto done;}
+            }
+#endif
         }
 
     /* Set the AAD */
@@ -331,12 +338,17 @@ ERL_NIF_TERM aead_cipher_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
         }
     else /* Decrypting. The plain text is already pointed to by 'out' */
         {
-#if defined(HAVE_GCM) || defined(HAVE_CHACHA20_POLY1305)
+#if defined(HAVE_GCM) || defined(HAVE_CHACHA20_POLY1305) || defined(HAVE_GCM_SIV)
             /* Check the Tag before returning. CCM_MODE does this previously. */
             if (!(cipherp->flags & CCM_MODE)) { /* That is, CHACHA20_POLY1305 or GCM_MODE */ 
-                if (EVP_CIPHER_CTX_ctrl(ctx, cipherp->extra.aead.ctx_ctrl_set_tag, (int)tag_len, tag_data) != 1)
-                    /* Decrypt error */
-                    {ret = atom_error; goto done;}
+#if defined(HAVE_GCM_SIV)
+                if (!(cipherp->flags & GCM_SIV_MODE))
+#endif
+                {
+                    if (EVP_CIPHER_CTX_ctrl(ctx, cipherp->extra.aead.ctx_ctrl_set_tag, (int)tag_len, tag_data) != 1)
+                        /* Decrypt error */
+                        {ret = atom_error; goto done;}
+                }
                 /* CCM dislikes EVP_DecryptFinal_ex on decrypting for pre 1.1.1, so we do it only here */
                 if (EVP_DecryptFinal_ex(ctx, outp+len, &len) != 1)
                     /* Decrypt error */

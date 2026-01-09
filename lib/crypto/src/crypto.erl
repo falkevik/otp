@@ -675,6 +675,10 @@ support all of them.
                      | aes_128_gcm
                      | aes_192_gcm
                      | aes_256_gcm
+                     | aes_128_gcm_siv
+                     | aes_192_gcm_siv
+                     | aes_256_gcm_siv
+
                      | aes_gcm
 
                      | sm4_gcm
@@ -1839,6 +1843,9 @@ aead_tag_len(aes_gcm    ) -> 16;
 aead_tag_len(aes_128_gcm) -> 16;
 aead_tag_len(aes_192_gcm) -> 16;
 aead_tag_len(aes_256_gcm) -> 16;
+aead_tag_len(aes_128_gcm_siv) -> 16;
+aead_tag_len(aes_192_gcm_siv) -> 16;
+aead_tag_len(aes_256_gcm_siv) -> 16;
 aead_tag_len(chacha20_poly1305) -> 16;
 aead_tag_len(sm4_gcm) -> 16;
 aead_tag_len(sm4_ccm) -> 16;
